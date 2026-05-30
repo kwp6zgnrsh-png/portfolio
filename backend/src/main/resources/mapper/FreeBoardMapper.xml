@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.study.backend.board.mapper.FreeBoardMapper">
+
+    <sql id="formatDate">DATE_FORMAT(${prefix}.created_date, '%Y-%m-%d %H:%i') AS createdDate</sql>
+
+    <sql id="freeBoardSearchConditions">
+        <where>
+            ${boardAlias}.board_type_id = #{boardTypeId}
+            AND ${boardAlias}.state = false
+            <if test="search.startDate != null and search.endDate != null">
+                AND ${boardAlias}.created_date BETWEEN #{search.startDate} AND CONCAT(#{search.endDate}, ' 23:59:59')
+            </if>
+            <if test='search.categoryId != null and search.categoryId != ""'>
+                AND ${boardAlias}.category_id = #{search.categoryId}
+            </if>
+            <if test="search.searchWord != null and search.searchWord != ''">
+                AND (${boardAlias}.title LIKE CONCAT('%', #{search.searchWord}, '%')
+                OR ${boardAlias}.content LIKE CONCAT('%', #{search.searchWord}, '%')
+                OR ${memberAlias}.member_name LIKE CONCAT('%', #{search.searchWord}, '%'))
+            </if>
+        </where>
+    </sql>
+
+    <insert id="createPost" useGeneratedKeys="true" keyProperty="board.id">
+        INSERT INTO board(title, content, board_type_id, category_id, member_id)
+        VALUES(#{board.title},#{board.content},#{boardTypeId},#{board.categoryId},#{memberId})
+    </insert>
+
+    <select id="searchPostList" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               c.category_name AS categoryName,
+               b.title,
+               b.views,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               (SELECT COUNT(*) FROM file f WHERE f.board_id = b.id AND f.state = false) AS fileCount,
+               (SELECT COUNT(*) FROM comment co WHERE co.board_id = b.id) AS commentCount,
+               m.member_name AS author
+        FROM (
+            SELECT b2.id
+            FROM board b2
+            <if test="search.orderByField == 'categoryName'">
+                JOIN category c2 ON c2.id = b2.category_id
+            </if>
+            <if test="search.searchWord != null and search.searchWord != ''">
+                JOIN member m2 ON m2.id = b2.member_id
+            </if>
+            <include refid="freeBoardSearchConditions">
+                <property name="boardAlias" value="b2"/>
+                <property name="memberAlias" value="m2"/>
+            </include>
+            ORDER BY
+            <choose>
+                <when test="search.orderByField == 'title'">b2.title</when>
+                <when test="search.orderByField == 'views'">b2.views</when>
+                <when test="search.orderByField == 'categoryName'">c2.category_name</when>
+                <otherwise>b2.id</otherwise>
+            </choose>
+            <choose>
+                <when test="search.direction == 'ASC'">ASC</when>
+                <otherwise>DESC</otherwise>
+            </choose>
+            LIMIT #{search.limit} OFFSET #{offset}
+        ) t
+        JOIN board b ON b.id = t.id
+        JOIN category c ON c.id = b.category_id
+        JOIN member m ON m.id = b.member_id
+        ORDER BY
+        <choose>
+            <when test="search.orderByField == 'title'">b.title</when>
+            <when test="search.orderByField == 'views'">b.views</when>
+            <when test="search.orderByField == 'categoryName'">c.category_name</when>
+            <otherwise>b.id</otherwise>
+        </choose>
+        <choose>
+            <when test="search.direction == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+
+    <select id="getPostCountByCriteria" resultType="int">
+        SELECT COUNT(*) FROM (
+            SELECT 1
+            FROM board b
+            <if test="search.searchWord != null and search.searchWord != ''">
+                JOIN member m ON m.id = b.member_id
+            </if>
+            <include refid="freeBoardSearchConditions">
+                <property name="boardAlias" value="b"/>
+                <property name="memberAlias" value="m"/>
+            </include>
+            LIMIT #{search.countLimit}
+        ) t
+    </select>
+
+    <select id="getPostForUpdate" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               b.title,
+               b.content,
+               b.member_id AS memberId,
+               b.board_type_id AS boardTypeId,
+               c.id AS categoryId
+        FROM board b
+            JOIN category c ON b.category_id = c.id
+        WHERE b.id = #{boardId} AND b.state = false
+    </select>
+
+    <select id="getPostById" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               b.title,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               b.content,
+               b.views,
+               m.member_name AS author,
+               m.id AS memberId,
+               b.board_type_id AS boardTypeId,
+               c.category_name
+        FROM board b
+            JOIN member m
+                ON m.id = b.member_id
+            JOIN category c
+                ON c.id = b.category_id
+        WHERE b.id = #{boardId} AND b.state = false
+    </select>
+
+    <select id="getPostList" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               c.category_name,
+               b.title,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               (SELECT COUNT(*) FROM file f WHERE f.board_id = b.id AND f.state = false) AS fileCount,
+               (SELECT COUNT(*) FROM comment co WHERE co.board_id = b.id) AS commentCount
+        FROM board b
+                 JOIN category c ON c.id = b.category_id
+        WHERE b.board_type_id = #{boardTypeId} AND b.state = false
+        ORDER BY b.id DESC
+        LIMIT 5
+    </select>
+
+    <update id="updatePost">
+        UPDATE board
+        SET title = #{board.title}, content =#{board.content}, category_id = #{board.categoryId}
+        WHERE id = #{boardId} AND member_id = #{memberId} AND state = false
+    </update>
+
+    <update id="updateViews">
+        UPDATE board SET views = views + 1
+        WHERE id = #{boardId} AND state = false
+    </update>
+
+    <update id="deletePost">
+        UPDATE board
+        SET state = true
+        WHERE id = #{boardId} AND member_id = #{memberId} AND state = false
+    </update>
+
+</mapper>

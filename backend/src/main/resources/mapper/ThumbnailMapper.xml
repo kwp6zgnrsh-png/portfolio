@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.study.backend.thumbnail.mapper.ThumbnailMapper">
+    <insert id="createThumbnail">
+        INSERT INTO thumbnail(file_name, store_name, extension, path, file_size, board_id)
+        VALUES (#{fileName},#{storeName},#{extension},#{path},#{fileSize},#{boardId})
+    </insert>
+
+    <select id="getThumbnailByBoardId" resultType="com.study.backend.thumbnail.model.ThumbnailMetaData">
+        SELECT file_name, store_name, extension, path, file_size, board_id
+        FROM thumbnail
+        WHERE board_id = #{boardId}
+    </select>
+
+    <delete id="deleteThumbnail">
+        DELETE
+        FROM thumbnail
+        WHERE board_id = #{boardId}
+    </delete>
+</mapper>

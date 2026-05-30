@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.study.backend.file.mapper.FileMapper">
+    <insert id="createFile">
+        INSERT INTO file(file_name, store_name, extension, path, file_size, board_id)
+        VALUES (#{fileName},#{storeName},#{extension},#{path},#{fileSize},#{boardId})
+    </insert>
+
+    <select id="getFilesByBoardId" resultType="com.study.backend.file.model.FileMetaData">
+        SELECT id, file_name, store_name, extension, path, file_size, board_id
+        FROM file
+        WHERE board_id = #{boardId} AND state = false
+    </select>
+
+    <select id="getFileByIdAndBoardType" resultType="com.study.backend.file.model.FileMetaData">
+        SELECT f.id, f.file_name, f.store_name, f.extension, f.path, f.file_size, f.board_id
+        FROM file f
+        INNER JOIN board b ON f.board_id = b.id
+        WHERE f.id = #{fileId}
+          AND f.state = false
+          AND b.state = false
+          AND b.board_type_id = #{boardTypeId}
+    </select>
+
+    <select id="getFirstFileByBoardId" resultType="com.study.backend.file.model.FileMetaData">
+        SELECT id, file_name, store_name, extension, path, file_size, board_id
+        FROM file
+        WHERE board_id = #{boardId} AND state = false
+        ORDER BY id
+        LIMIT 1
+    </select>
+    
+    <update id="deleteFileById">
+        UPDATE file
+        SET state = true
+        WHERE id = #{fileId}
+    </update>
+</mapper>

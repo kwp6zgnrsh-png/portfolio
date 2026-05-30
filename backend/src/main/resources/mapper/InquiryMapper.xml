@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.study.backend.board.mapper.InquiryMapper">
+
+    <sql id="formatDate">DATE_FORMAT(${prefix}.created_date, '%Y-%m-%d %H:%i') AS createdDate</sql>
+
+    <sql id="inquirySearchConditions">
+        <where>
+            ${boardAlias}.board_type_id = #{boardTypeId}
+            AND ${boardAlias}.state = false
+            <if test="search.onlyMine == true and search.memberId != null">
+                AND ${memberAlias}.id = #{search.memberId}
+            </if>
+            <if test="search.startDate != null and search.endDate != null">
+                AND ${boardAlias}.created_date BETWEEN #{search.startDate} AND CONCAT(#{search.endDate}, ' 23:59:59')
+            </if>
+            <if test="search.searchWord != null and search.searchWord != ''">
+                AND (${boardAlias}.title LIKE CONCAT('%', #{search.searchWord}, '%')
+                OR ${boardAlias}.content LIKE CONCAT('%', #{search.searchWord}, '%')
+                OR ${memberAlias}.member_name LIKE CONCAT('%', #{search.searchWord}, '%'))
+            </if>
+        </where>
+    </sql>
+
+    <insert id="createPost" useGeneratedKeys="true" keyProperty="board.id">
+        INSERT INTO board(title, content, is_secret, secret_password, board_type_id, member_id)
+        VALUES(#{board.title},#{board.content},#{board.isSecret},#{board.secretPassword},#{boardTypeId},#{memberId})
+    </insert>
+
+    <select id="searchPostList" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               b.title,
+               b.views,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               b.is_secret,
+               (SELECT COUNT(*) FROM answer a WHERE a.board_id = b.id) AS answerCount,
+               m.member_name AS author
+        FROM (
+            SELECT b2.id
+            FROM board b2
+            <if test="(search.onlyMine == true and search.memberId != null) or (search.searchWord != null and search.searchWord != '')">
+                JOIN member m2 ON m2.id = b2.member_id
+            </if>
+            <include refid="inquirySearchConditions">
+                <property name="boardAlias" value="b2"/>
+                <property name="memberAlias" value="m2"/>
+            </include>
+            ORDER BY
+            <choose>
+                <when test="search.orderByField == 'title'">b2.title</when>
+                <when test="search.orderByField == 'views'">b2.views</when>
+                <otherwise>b2.id</otherwise>
+            </choose>
+            <choose>
+                <when test="search.direction == 'ASC'">ASC</when>
+                <otherwise>DESC</otherwise>
+            </choose>
+            LIMIT #{search.limit} OFFSET #{offset}
+        ) t
+        JOIN board b ON b.id = t.id
+        JOIN member m ON m.id = b.member_id
+        ORDER BY
+        <choose>
+            <when test="search.orderByField == 'title'">b.title</when>
+            <when test="search.orderByField == 'views'">b.views</when>
+            <otherwise>b.id</otherwise>
+        </choose>
+        <choose>
+            <when test="search.direction == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+
+    <select id="getPostCountByCriteria" resultType="int">
+        SELECT COUNT(*) FROM (
+            SELECT 1
+            FROM board b
+            <if test="(search.onlyMine == true and search.memberId != null) or (search.searchWord != null and search.searchWord != '')">
+                JOIN member m ON m.id = b.member_id
+            </if>
+            <include refid="inquirySearchConditions">
+                <property name="boardAlias" value="b"/>
+                <property name="memberAlias" value="m"/>
+            </include>
+            LIMIT #{search.countLimit}
+        ) t
+    </select>
+
+    <select id="getPostForUpdate" resultType="com.study.backend.board.model.Board">
+        SELECT id,
+               title,
+               content,
+               is_secret,
+               board_type_id AS boardTypeId,
+               member_id AS memberId
+        FROM board
+        WHERE id = #{boardId} AND state = false
+    </select>
+
+    <select id="getPostById" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               b.title,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               b.content,
+               b.views,
+               b.is_secret,
+               b.secret_password,
+               m.member_name AS author,
+               m.id AS memberId,
+               b.board_type_id AS boardTypeId
+        FROM board b
+            JOIN member m
+                ON m.id = b.member_id
+        WHERE b.id = #{boardId} AND b.state = false
+    </select>
+
+    <select id="getInquiryReplyById" resultType="com.study.backend.board.model.Board">
+        SELECT a.id,
+               a.content,
+               <include refid="formatDate"><property name="prefix" value="a"/></include>,
+               m.manager_name AS author
+        FROM answer a
+            JOIN manager m
+                ON m.id = a.manager_id
+        WHERE board_id = #{boardId}
+    </select>
+
+    <select id="isReplied" resultType="Boolean">
+        SELECT EXISTS(SELECT 1 FROM answer WHERE board_id = #{boardId})
+    </select>
+
+    <select id="getPostList" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               b.title,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               b.is_secret,
+               (SELECT COUNT(*) FROM answer a WHERE a.board_id = b.id) AS answerCount
+        FROM board b
+        WHERE b.board_type_id = #{boardTypeId} AND b.state = false
+        ORDER BY b.id DESC
+        LIMIT 5
+    </select>
+
+    <select id="getSecretPassword" resultType="string">
+        SELECT secret_password
+        FROM board
+        WHERE id = #{boardId} AND state = false
+    </select>
+
+    <update id="updatePost">
+        UPDATE board
+        SET title = #{board.title},
+            content = #{board.content},
+            is_secret = #{board.isSecret},
+            secret_password = #{board.secretPassword}
+        WHERE id = #{boardId} AND member_id = #{memberId} AND state = false
+    </update>
+
+    <update id="updateViews">
+        UPDATE board SET views = views + 1
+        WHERE id = #{boardId} AND state = false
+    </update>
+
+    <update id="deletePost">
+        UPDATE board
+        SET state = true
+        WHERE id = #{boardId} AND member_id = #{memberId} AND state = false
+    </update>
+</mapper>

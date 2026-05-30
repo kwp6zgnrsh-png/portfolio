@@ -1,0 +1,35 @@
+spring:
+  config:
+    import: optional:file:./config/application-local-secrets.yml
+  datasource:
+    url: jdbc:mysql://localhost:3308/ebrainsoft_study?serverTimezone=UTC&characterEncoding=utf8
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 10
+
+jwt:
+  exp: 10800
+
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+free-board:
+  path: board/
+  deleted-path: boardDeleted/
+
+store:
+  base-path: /your/local/path/store/
+
+gallery-board:
+  thumbnail:
+    path: thumbnail/
+  picture:
+    path: gallery/
+    deleted-path: galleryDeleted/
+
+app:
+  cors:
+    allowed-origins: "http://localhost:5173"
+  cookie:
+    secure: false

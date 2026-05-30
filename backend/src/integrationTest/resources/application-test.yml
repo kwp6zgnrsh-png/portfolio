@@ -1,0 +1,38 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # url/username/password는 IntegrationTestBase의 DynamicPropertySource가 컨테이너 정보로 덮어씀
+    url: placeholder
+    username: placeholder
+    password: placeholder
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+jwt:
+  secret: d52451887cdd45742cfeed8f30599754834d6035e3001d49a76d989042772500
+  exp: 10800
+
+store:
+  base-path: /tmp/test-store/
+
+free-board:
+  path: board/
+  deleted-path: boardDeleted/
+  volume: 2097152
+
+gallery-board:
+  thumbnail:
+    path: thumbnail/
+  picture:
+    path: gallery/
+    deleted-path: galleryDeleted/
+    volume: 1048576
+
+app:
+  cors:
+    allowed-origins: "http://localhost:5173"
+  cookie:
+    secure: false

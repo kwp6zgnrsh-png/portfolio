@@ -1,0 +1,91 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.3'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'com.study'
+version = '0.0.1-SNAPSHOT'
+
+ext['testcontainers.version'] = '1.20.6'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+sourceSets {
+    integrationTest {
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+    compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:3.0.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'com.mysql:mysql-connector-j'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mysql'
+    implementation 'org.springframework.security:spring-security-crypto'
+
+    implementation 'org.springframework.boot:spring-boot-starter-validation' // valid
+
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6' // jwt
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'// jwt
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6' // jwt
+
+    implementation 'net.coobird:thumbnailator:0.4.18' // 썸네일
+
+    implementation 'org.mapstruct:mapstruct:1.6.2' // mapstruct
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.2' // mapstruct
+
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0' // Swagger
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'Runs integration tests.'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+
+    maxParallelForks = 1
+    environment 'DOCKER_HOST', 'unix:///var/run/docker.sock'
+    environment 'TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE', '/var/run/docker.sock'
+    systemProperty 'api.version', '1.41'
+
+    shouldRunAfter test
+}
+
+tasks.named('processResources') {
+    exclude 'application-local-secrets.yml'
+}
+
+bootRun {
+    args = ['--spring.profiles.active=local']
+}

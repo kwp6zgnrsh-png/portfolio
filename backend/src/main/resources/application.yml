@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: spa
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 20MB
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+jwt:
+  secret: ${JWT_SECRET}
+  exp: ${JWT_EXP}
+
+store:
+  base-path: ${STORE_BASE_PATH}
+
+free-board:
+  path: ${FREE_BOARD_PATH}
+  deleted-path: ${FREE_BOARD_DELETED_PATH}
+  volume: 2097152
+  max-file-count: 10
+
+gallery-board:
+  thumbnail:
+    path: ${GALLERY_THUMBNAIL_PATH}
+  picture:
+    path: ${GALLERY_PICTURE_PATH}
+    deleted-path: ${GALLERY_PICTURE_DELETED_PATH}
+    volume: 1048576
+    max-file-count: 20
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  cookie:
+    secure: true
+
+notice:
+  pinned-category-id: 5
+
+async:
+  executor:
+    core-size: 4
+    max-size: 8
+    queue-capacity: 50
+
+server:
+  tomcat:
+    uri-encoding: UTF-8

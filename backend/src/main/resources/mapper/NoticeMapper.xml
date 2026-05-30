@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.study.backend.board.mapper.NoticeMapper">
+
+    <sql id="formatDate">DATE_FORMAT(${prefix}.created_date, '%Y-%m-%d %H:%i') AS createdDate</sql>
+
+    <resultMap id="noticeListResultMap" type="com.study.backend.board.dto.notice.NoticeList">
+        <constructor>
+            <arg column="id" javaType="java.lang.Long"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="views" javaType="java.lang.Integer"/>
+            <arg column="createdDate" javaType="java.lang.String"/>
+            <arg column="categoryName" javaType="java.lang.String"/>
+            <arg column="author" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="noticeSearchConditions">
+        <where>
+            ${boardAlias}.board_type_id = #{boardTypeId}
+            AND ${boardAlias}.state = false
+            <if test="search.startDate != null and search.endDate != null">
+                AND ${boardAlias}.created_date BETWEEN #{search.startDate} AND CONCAT(#{search.endDate}, ' 23:59:59')
+            </if>
+            <if test='search.categoryId != null and search.categoryId != ""'>
+                AND ${boardAlias}.category_id = #{search.categoryId}
+            </if>
+            <if test="search.searchWord != null and search.searchWord != ''">
+                AND (${boardAlias}.title LIKE CONCAT('%', #{search.searchWord}, '%')
+                OR ${boardAlias}.content LIKE CONCAT('%', #{search.searchWord}, '%'))
+            </if>
+        </where>
+    </sql>
+
+    <select id="searchPostList" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               c.category_name AS categoryName,
+               b.title,
+               b.views,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               m.manager_name AS author
+        FROM (
+            SELECT b2.id
+            FROM board b2
+            <if test="search.orderByField == 'categoryName'">
+                JOIN category c2 ON c2.id = b2.category_id
+            </if>
+            <include refid="noticeSearchConditions">
+                <property name="boardAlias" value="b2"/>
+            </include>
+            ORDER BY
+            <choose>
+                <when test="search.orderByField == 'title'">b2.title</when>
+                <when test="search.orderByField == 'views'">b2.views</when>
+                <when test="search.orderByField == 'categoryName'">c2.category_name</when>
+                <otherwise>b2.id</otherwise>
+            </choose>
+            <choose>
+                <when test="search.direction == 'ASC'">ASC</when>
+                <otherwise>DESC</otherwise>
+            </choose>
+            LIMIT #{search.limit} OFFSET #{offset}
+        ) t
+        JOIN board b ON b.id = t.id
+        JOIN category c ON c.id = b.category_id
+        JOIN manager m ON m.id = b.manager_id
+        ORDER BY
+        <choose>
+            <when test="search.orderByField == 'title'">b.title</when>
+            <when test="search.orderByField == 'views'">b.views</when>
+            <when test="search.orderByField == 'categoryName'">c.category_name</when>
+            <otherwise>b.id</otherwise>
+        </choose>
+        <choose>
+            <when test="search.direction == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+
+    <select id="getPostCountByCriteria" resultType="int">
+        SELECT COUNT(*) FROM (
+            SELECT 1
+            FROM board b
+            <include refid="noticeSearchConditions">
+                <property name="boardAlias" value="b"/>
+            </include>
+            LIMIT #{search.countLimit}
+        ) t
+    </select>
+
+    <!-- 공지사항 고정된 거 가져오기 -->
+    <select id="getPinnedNotices" resultMap="noticeListResultMap">
+        SELECT b.id,
+               c.category_name AS categoryName,
+               b.title,
+               b.views,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               m.manager_name AS author
+        FROM board b
+                 JOIN category c
+                      ON c.id = b.category_id
+                 JOIN manager m
+                      ON m.id = b.manager_id
+        WHERE b.board_type_id = #{boardTypeId}
+          AND b.state = false
+          AND c.id = #{pinnedCategoryId}
+        ORDER BY b.id DESC
+    </select>
+
+    <select id="getPostById" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               b.title,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>,
+               b.content,
+               b.views,
+               m.manager_name AS author,
+               c.category_name,
+               b.board_type_id AS boardTypeId
+        FROM board b
+            JOIN manager m
+                ON m.id = b.manager_id
+            JOIN category c
+                ON c.id = b.category_id
+        WHERE b.id = #{boardId} AND b.state = false
+    </select>
+
+    <select id="getPostList" resultType="com.study.backend.board.model.Board">
+        SELECT b.id,
+               c.category_name,
+               b.title,
+               <include refid="formatDate"><property name="prefix" value="b"/></include>
+        FROM board b
+                 JOIN category c ON b.category_id = c.id
+        WHERE b.board_type_id = #{boardTypeId}
+          AND b.state = false
+        ORDER BY b.id DESC
+        LIMIT 5
+    </select>
+
+    <update id="updateViews">
+        UPDATE board SET views = views + 1
+        WHERE id = #{boardId} AND state = false
+    </update>
+
+</mapper>

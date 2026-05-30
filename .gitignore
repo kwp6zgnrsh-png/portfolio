@@ -1,0 +1,32 @@
+# Secrets and environment files
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+backend/config/application-local-secrets.yml
+backend/src/main/resources/application-local.yml
+
+# Build outputs and dependencies
+backend/build/
+backend/.gradle/
+backend/.gradle-home/
+frontend/dist/
+frontend/node_modules/
+
+# Local upload/file storage
+/store/
+
+# IDE and local tool settings
+.idea/
+.vscode/
+.claude/
+backend/.idea/
+backend/.claude/
+frontend/.idea/
+frontend/.vscode/
+
+# OS files
+.DS_Store
+
+# Local exports
+portfolio-export.pdf

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.study.backend.member.mapper.MemberMapper">
+
+    <insert id="createMember">
+        INSERT INTO member(member_id, member_password, member_name)
+        VALUES(#{memberId},#{memberPassword},#{memberName})
+    </insert>
+
+    <select id="getMemberById" resultType="com.study.backend.member.model.Member">
+        SELECT id,
+               member_id,
+               member_password,
+               member_name
+        FROM member
+        WHERE member_id = #{memberId}
+    </select>
+
+    <select id="isIdBlocked" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM blocked_member_id WHERE member_id = #{memberId})
+    </select>
+</mapper>
