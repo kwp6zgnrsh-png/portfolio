@@ -153,6 +153,35 @@ MySQL
 
 Vue 기반 SPA가 Axios를 통해 Spring Boot REST API와 통신하고, 백엔드는 MyBatis Mapper를 통해 MySQL에 접근합니다. 인증 정보는 JWT를 쿠키로 전달하며, 백엔드는 인터셉터와 커스텀 ArgumentResolver를 통해 로그인 회원 정보를 공통으로 처리합니다.
 
+### 프론트-백엔드 통신 흐름
+```mermaid
+flowchart TD
+    A[사용자] -->|HTTP 요청| B[Vue 3 - front]
+
+    B -->|Axios withCredentials: true| C[JwtAuthInterceptor]
+
+    subgraph Spring Boot - spa
+        C -->|@Public 엔드포인트| E[Controller]
+        C -->|JWT 쿠키 검증| D{토큰 유효?}
+        D -->|유효| E
+        D -->|무효/만료| F[401 Unauthorized]
+
+        E --> G[BoardStrategyFactory]
+        G --> H[BoardType.from boardType]
+        H --> I{게시판 타입}
+
+        I --> J[NoticeStrategy]
+        I --> K[FreeBoardStrategy]
+        I --> L[GalleryStrategy]
+        I --> M[InquiryStrategy]
+
+        J & K & L & M --> N[MyBatis Mapper]
+    end
+
+    N -->|SQL 쿼리| O[(MySQL)]
+    F -->|리다이렉트| B
+```
+
 ### Backend 구조
 
 ```text
