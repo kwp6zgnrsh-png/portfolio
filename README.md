@@ -155,6 +155,7 @@ Vue 기반 SPA가 Axios를 통해 Spring Boot REST API와 통신하고, 백엔�
 
 ### 프론트-백엔드 통신 흐름
 
+```mermaid
 flowchart TD
     A[사용자] -->|HTTP 요청| B[Vue 3 - front]
 
@@ -180,6 +181,8 @@ flowchart TD
 
     N -->|SQL 쿼리| O[(MySQL)]
     F -->|리다이렉트| B
+```
+
 
 ### Backend 구조
 
