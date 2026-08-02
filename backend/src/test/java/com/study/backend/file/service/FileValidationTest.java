@@ -3,6 +3,8 @@ package com.study.backend.file.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 
@@ -10,6 +12,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -20,6 +24,8 @@ import com.study.backend.file.model.FileMetaData;
 
 @ExtendWith(MockitoExtension.class)
 class FileValidationTest {
+
+    @TempDir Path tempDir;
 
     @Mock FileMapper fileMapper;
 
@@ -78,6 +84,34 @@ class FileValidationTest {
         assertThatThrownBy(() -> fileService.validateFiles(new MockMultipartFile[]{file}))
             .isInstanceOf(FileException.class);
     }
+
+	@Test
+	@DisplayName("JPEG 내용을 HTML 파일명으로 업로드해도 서버는 JPG로 저장한다")
+	void createFiles_jpegNamedHtml_usesCanonicalJpgExtension() throws Exception {
+		Path uploadDirectory = Files.createDirectories(tempDir.resolve("test"));
+		TestFileService uploadService = new TestFileService(fileMapper, tempDir.toString());
+		byte[] jpegPolyglot = {
+			(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0,
+			'<', 's', 'c', 'r', 'i', 'p', 't', '>'
+		};
+		MockMultipartFile file = new MockMultipartFile(
+			"file", "evil.html", "image/jpeg", jpegPolyglot
+		);
+
+		List<Path> savedPaths = uploadService.createFiles(1L, new MockMultipartFile[]{file});
+
+		ArgumentCaptor<FileMetaData> metadataCaptor = ArgumentCaptor.forClass(FileMetaData.class);
+		then(fileMapper).should().createFile(metadataCaptor.capture());
+		FileMetaData metadata = metadataCaptor.getValue();
+
+		assertThat(metadata.getFileName()).isEqualTo("evil.jpg");
+		assertThat(metadata.getExtension()).isEqualTo(".jpg");
+		assertThat(savedPaths).singleElement().satisfies(path -> {
+			assertThat(path.getParent()).isEqualTo(uploadDirectory);
+			assertThat(path.getFileName().toString()).endsWith(".jpg").doesNotEndWith(".html");
+			assertThat(path).exists();
+		});
+	}
 
     @Test
     @DisplayName("파일 크기가 초과되면 예외를 던진다")
@@ -167,9 +201,15 @@ class FileValidationTest {
     // ── 테스트용 구체 구현 ────────────────────────────────────────────────
 
     static class TestFileService extends AbstractFileService {
+		private final String storePath;
 
         public TestFileService(FileMapper fileMapper) {
+			this(fileMapper, "/store");
+		}
+
+		public TestFileService(FileMapper fileMapper, String storePath) {
             super(fileMapper, event -> {});
+			this.storePath = storePath;
         }
 
         @Override protected String getPath() { return "/test/"; }
@@ -180,7 +220,7 @@ class FileValidationTest {
 
         @Override
         public String resolveAbsolutePath(String path) {
-            return joinStorePath("/store", path);
+			return joinStorePath(storePath, path);
         }
     }
 }

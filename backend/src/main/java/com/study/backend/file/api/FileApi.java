@@ -5,6 +5,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,6 +42,8 @@ public class FileApi {
 
 		return ResponseEntity.ok()
 			.header("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFileName)
+			.header("X-Content-Type-Options", "nosniff")
+			.contentType(MediaType.APPLICATION_OCTET_STREAM)
 			.body(new FileSystemResource(file));
 	}
 }

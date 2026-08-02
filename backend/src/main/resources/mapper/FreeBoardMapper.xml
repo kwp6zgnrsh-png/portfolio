@@ -11,7 +11,8 @@
             ${boardAlias}.board_type_id = #{boardTypeId}
             AND ${boardAlias}.state = false
             <if test="search.startDate != null and search.endDate != null">
-                AND ${boardAlias}.created_date BETWEEN #{search.startDate} AND CONCAT(#{search.endDate}, ' 23:59:59')
+                AND ${boardAlias}.created_date &gt;= #{search.startDate}
+                AND ${boardAlias}.created_date &lt; DATE_ADD(#{search.endDate}, INTERVAL 1 DAY)
             </if>
             <if test='search.categoryId != null and search.categoryId != ""'>
                 AND ${boardAlias}.category_id = #{search.categoryId}
@@ -62,6 +63,13 @@
                 <when test="search.direction == 'ASC'">ASC</when>
                 <otherwise>DESC</otherwise>
             </choose>
+            <if test="search.orderByField == 'title' or search.orderByField == 'views' or search.orderByField == 'categoryName'">
+                , b2.id
+                <choose>
+                    <when test="search.direction == 'ASC'">ASC</when>
+                    <otherwise>DESC</otherwise>
+                </choose>
+            </if>
             LIMIT #{search.limit} OFFSET #{offset}
         ) t
         JOIN board b ON b.id = t.id
@@ -78,6 +86,13 @@
             <when test="search.direction == 'ASC'">ASC</when>
             <otherwise>DESC</otherwise>
         </choose>
+        <if test="search.orderByField == 'title' or search.orderByField == 'views' or search.orderByField == 'categoryName'">
+            , b.id
+            <choose>
+                <when test="search.direction == 'ASC'">ASC</when>
+                <otherwise>DESC</otherwise>
+            </choose>
+        </if>
     </select>
 
     <select id="getPostCountByCriteria" resultType="int">

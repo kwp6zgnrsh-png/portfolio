@@ -1,5 +1,7 @@
 package com.study.backend.board.model;
 
+import java.time.LocalDate;
+
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -18,8 +20,8 @@ import lombok.Setter;
 @Setter
 @Builder(toBuilder = true)
 public class Search {
-	private String startDate;
-	private String endDate;
+	private LocalDate startDate;
+	private LocalDate endDate;
 	private Long categoryId;
 	private String searchWord;
 	private Integer page;

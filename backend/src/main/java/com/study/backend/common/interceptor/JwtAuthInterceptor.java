@@ -43,6 +43,9 @@ public class JwtAuthInterceptor implements HandlerInterceptor {
 		}
 
 		Long memberId = jwtTokenProvider.getMemberId(token);
+		if (memberId == null) {
+			throw new AuthorizationException("인증 정보가 올바르지 않습니다");
+		}
 		request.setAttribute(AuthRequestAttributes.MEMBER_ID, memberId);
 		return true;
 	}

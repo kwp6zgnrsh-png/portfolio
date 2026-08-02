@@ -9,7 +9,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 2MB
-      max-request-size: 20MB
+      max-request-size: 25MB
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml

@@ -13,6 +13,7 @@ import com.study.backend.board.model.BoardType;
 import com.study.backend.board.model.Page;
 import com.study.backend.board.model.Search;
 import com.study.backend.board.service.InquiryService;
+import com.study.backend.common.exception.AuthorizationException;
 import com.study.backend.common.util.JwtTokenProvider;
 
 import lombok.RequiredArgsConstructor;
@@ -27,11 +28,13 @@ public class InquiryStrategy implements BoardReadableStrategy, BoardCreateStrate
 
 	@Override
 	public List<Board> searchPostList(Search search) {
+		validateOnlyMineAccess(search);
 		return boardService.searchPostList(search, BoardType.INQUIRIES.id());
 	}
 
 	@Override
 	public Integer getPostCount(Search search) {
+		validateOnlyMineAccess(search);
 		return boardService.getPostCountByCriteria(search, BoardType.INQUIRIES.id());
 	}
 
@@ -105,5 +108,11 @@ public class InquiryStrategy implements BoardReadableStrategy, BoardCreateStrate
 	public void validateAccess(Board board, Long memberId, String secretToken) {
 		Long tokenBoardId = jwtTokenProvider.getSecretBoardId(secretToken);
 		boardService.validateSecretPostAccess(board, memberId, tokenBoardId);
+	}
+
+	private void validateOnlyMineAccess(Search search) {
+		if (Boolean.TRUE.equals(search.getOnlyMine()) && search.getMemberId() == null) {
+			throw new AuthorizationException("내 문의만 조회하려면 로그인이 필요합니다.");
+		}
 	}
 }

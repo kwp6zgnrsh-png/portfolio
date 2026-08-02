@@ -99,16 +99,13 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 		return true;
 	}
 
-	/** 로그인 성공 및 비밀글 검증 성공 시 실패 카운트를 초기화한다. */
+	/** 비밀글 검증 결과에 따라 해당 IP + 게시글의 실패 카운트를 기록하거나 초기화한다. */
 	@Override
 	public void afterCompletion(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
 		@NonNull Object handler, Exception ex) {
 		int status = response.getStatus();
 
 		if (isLoginPath(request)) {
-			if (isSuccessStatus(status)) {
-				loginAttempts.remove(resolveClientIp(request));
-			}
 			return;
 		}
 

@@ -14,7 +14,8 @@
                 AND ${memberAlias}.id = #{search.memberId}
             </if>
             <if test="search.startDate != null and search.endDate != null">
-                AND ${boardAlias}.created_date BETWEEN #{search.startDate} AND CONCAT(#{search.endDate}, ' 23:59:59')
+                AND ${boardAlias}.created_date &gt;= #{search.startDate}
+                AND ${boardAlias}.created_date &lt; DATE_ADD(#{search.endDate}, INTERVAL 1 DAY)
             </if>
             <if test="search.searchWord != null and search.searchWord != ''">
                 AND (${boardAlias}.title LIKE CONCAT('%', #{search.searchWord}, '%')
@@ -57,6 +58,13 @@
                 <when test="search.direction == 'ASC'">ASC</when>
                 <otherwise>DESC</otherwise>
             </choose>
+            <if test="search.orderByField == 'title' or search.orderByField == 'views'">
+                , b2.id
+                <choose>
+                    <when test="search.direction == 'ASC'">ASC</when>
+                    <otherwise>DESC</otherwise>
+                </choose>
+            </if>
             LIMIT #{search.limit} OFFSET #{offset}
         ) t
         JOIN board b ON b.id = t.id
@@ -71,6 +79,13 @@
             <when test="search.direction == 'ASC'">ASC</when>
             <otherwise>DESC</otherwise>
         </choose>
+        <if test="search.orderByField == 'title' or search.orderByField == 'views'">
+            , b.id
+            <choose>
+                <when test="search.direction == 'ASC'">ASC</when>
+                <otherwise>DESC</otherwise>
+            </choose>
+        </if>
     </select>
 
     <select id="getPostCountByCriteria" resultType="int">

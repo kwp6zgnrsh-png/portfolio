@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -97,7 +98,7 @@ class InquiryMapperTest extends IntegrationTestBase {
         inquiryMapper.createPost(othersPost, 4L, otherMemberId);
 
         Search onlyMineSearch = Search.builder()
-            .startDate("2020-01-01").endDate("2030-12-31")
+            .startDate(LocalDate.of(2020, 1, 1)).endDate(LocalDate.of(2030, 12, 31))
             .limit(10).page(1).orderByField("createdDate").direction("DESC")
             .onlyMine(true).memberId(testMemberId).build();
         List<Board> result = inquiryMapper.searchPostList(onlyMineSearch, 4L, 0);
@@ -154,8 +155,8 @@ class InquiryMapperTest extends IntegrationTestBase {
 
     private Search baseSearch() {
         return Search.builder()
-            .startDate("2020-01-01")
-            .endDate("2030-12-31")
+            .startDate(LocalDate.of(2020, 1, 1))
+            .endDate(LocalDate.of(2030, 12, 31))
             .limit(10)
             .countLimit(1000)
             .page(1)

@@ -16,6 +16,7 @@ import com.study.backend.board.dto.common.request.BoardUpdateRequest;
 import com.study.backend.board.mapper.GalleryMapper;
 import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
+import com.study.backend.category.service.CategoryService;
 import com.study.backend.file.event.FileCleanupEvent;
 import com.study.backend.file.exception.FileException;
 import com.study.backend.file.model.FileMetaData;
@@ -39,23 +40,28 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 	private final FileServiceFactory fileService;
 	private final ThumbnailService thumbnailService;
 	private final ApplicationEventPublisher eventPublisher;
+	private final CategoryService categoryService;
 
-	public GalleryService(GalleryMapper mapper, FileServiceFactory fileService, ThumbnailService thumbnailService, ApplicationEventPublisher eventPublisher) {
+	public GalleryService(GalleryMapper mapper, FileServiceFactory fileService, ThumbnailService thumbnailService,
+						  ApplicationEventPublisher eventPublisher, CategoryService categoryService) {
 		super(mapper);
 		this.fileService = fileService;
 		this.thumbnailService = thumbnailService;
 		this.eventPublisher = eventPublisher;
+		this.categoryService = categoryService;
 	}
 
 	/** 갤러리 게시글을 등록한다. */
 	@Transactional
 	public void createPost(Board board, Long boardTypeId, Long memberId) {
+		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 		mapper.createPost(board, boardTypeId, memberId);
 	}
 
 	/** 갤러리 게시글, 원본 이미지, 썸네일을 하나의 성공 단위로 등록한다. */
 	@Transactional
 	public void createPostWithFilesAndThumbnail(Board board, Long boardTypeId, Long memberId, MultipartFile[] files) {
+		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 		mapper.createPost(board, boardTypeId, memberId);
 		FileService fs = fileService.getFileService(BoardType.GALLERIES);
 		try {
@@ -85,6 +91,7 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 	public void updatePost(Long boardId, BoardUpdateRequest board, Long memberId, MultipartFile[] files) {
 		Board updateBoard = mapper.getPostById(boardId);
 		validateOwnership(updateBoard, memberId, "수정할 수 있는 권한이 없습니다.");
+		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 
 		FileService fs = fileService.getFileService(BoardType.GALLERIES);
 

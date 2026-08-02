@@ -90,19 +90,27 @@ public abstract class AbstractFileService implements FileService {
 	@Override
 	@Transactional
 	public List<Path> createFiles(Long boardId, MultipartFile[] files) {
+		if (files == null || files.length == 0) {
+			return List.of();
+		}
+		validateFiles(files);
+
 		List<Path> writtenPaths = new ArrayList<>();
 		try {
 			for (MultipartFile multipartFile : files) {
 				if (!multipartFile.isEmpty()) {
-					String fileName = multipartFile.getOriginalFilename();
-					if (fileName == null || fileName.isBlank()) {
+					String originalFileName = multipartFile.getOriginalFilename();
+					if (originalFileName == null || originalFileName.isBlank()) {
 						throw new FileException("파일명이 유효하지 않습니다.");
 					}
-					String[] storeNameAndExtension = generateStoreName(fileName);
+
+					String mimeSubtype = extractMimeSubtype(multipartFile);
+					String[] storeNameAndExtension = generateStoreName(mimeSubtype);
+					String safeFileName = normalizeFileName(originalFileName, storeNameAndExtension[1]);
 					String uploadPath = (resolveAbsolutePath(getPath()) + storeNameAndExtension[0] + storeNameAndExtension[1]);
 
 					FileMetaData fileMetaData = FileMetaData.builder()
-						.fileName(fileName)
+						.fileName(safeFileName)
 						.storeName(storeNameAndExtension[0])
 						.extension(storeNameAndExtension[1])
 						.path(getPath())
@@ -276,13 +284,36 @@ public abstract class AbstractFileService implements FileService {
 		fileMapper.deleteFileById(fileId);
 	}
 
-	/** 원본 파일명에서 확장자를 분리하고 UUID로 저장명을 생성한다. [storeName, extension] 형태로 반환한다. */
-	protected String[] generateStoreName(String fileName) {
-		int index = fileName.lastIndexOf('.');
-		if (index < 0) throw new FileException("확장자가 없는 파일은 업로드할 수 없습니다.");
-		String extension = fileName.substring(index);
+	/** 검증된 MIME subtype으로 서버 저장 확장자를 결정하고 UUID 저장명을 생성한다. */
+	protected String[] generateStoreName(String mimeSubtype) {
+		String extension = canonicalExtension(mimeSubtype);
 		String storeName = UUID.randomUUID().toString();
 		return new String[]{storeName, extension};
+	}
+
+	/** 검증된 MIME subtype에 대응하는 안전한 표준 확장자를 반환한다. */
+	private String canonicalExtension(String mimeSubtype) {
+		return switch (mimeSubtype) {
+			case "jpeg" -> ".jpg";
+			case "png" -> ".png";
+			case "gif" -> ".gif";
+			case "zip" -> ".zip";
+			default -> throw new FileException("파일 형식 오류");
+		};
+	}
+
+	/** 경로와 제어 문자를 제거하고 검증된 확장자로 다운로드 파일명을 정규화한다. */
+	private String normalizeFileName(String originalFileName, String extension) {
+		String normalized = originalFileName.replace('\\', '/');
+		normalized = normalized.substring(normalized.lastIndexOf('/') + 1)
+			.replaceAll("[\\p{Cntrl}]", "_");
+
+		int extensionIndex = normalized.lastIndexOf('.');
+		String baseName = extensionIndex > 0 ? normalized.substring(0, extensionIndex) : normalized;
+		if (baseName.isBlank()) {
+			baseName = "file";
+		}
+		return baseName + extension;
 	}
 
 	/** 각 파일의 용량과 MIME 타입을 검증한다. 초과 또는 허용되지 않은 형식이면 예외를 던진다. */

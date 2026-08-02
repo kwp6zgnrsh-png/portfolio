@@ -12,6 +12,7 @@ import com.study.backend.board.dto.common.request.BoardUpdateRequest;
 import com.study.backend.board.mapper.FreeBoardMapper;
 import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
+import com.study.backend.category.service.CategoryService;
 import com.study.backend.file.service.FileService;
 import com.study.backend.file.service.FileServiceFactory;
 import com.study.backend.file.util.FileCleanupHelper;
@@ -20,15 +21,18 @@ import com.study.backend.file.util.FileCleanupHelper;
 public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
 
 	private final FileServiceFactory fileService;
+	private final CategoryService categoryService;
 
-	public FreeBoardService(FreeBoardMapper mapper, FileServiceFactory fileService) {
+	public FreeBoardService(FreeBoardMapper mapper, FileServiceFactory fileService, CategoryService categoryService) {
 		super(mapper);
 		this.fileService = fileService;
+		this.categoryService = categoryService;
 	}
 
 	/** 자유게시판 게시글을 등록한다. */
 	@Transactional
 	public void createPost(Board board, Long boardTypeId, Long memberId) {
+		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 		mapper.createPost(board, boardTypeId, memberId);
 	}
 
@@ -43,6 +47,7 @@ public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
 	public void updatePost(Long boardId, BoardUpdateRequest board, Long memberId, MultipartFile[] files) {
 		Board updateBoard = mapper.getPostById(boardId);
 		validateOwnership(updateBoard, memberId, "수정할 수 있는 권한이 없습니다.");
+		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 
 		FileService fs = fileService.getFileService(BoardType.BOARDS);
 

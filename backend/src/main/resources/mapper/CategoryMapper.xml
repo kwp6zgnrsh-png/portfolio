@@ -16,4 +16,13 @@
         FROM category
         WHERE category_type = #{categoryType}
     </select>
+
+    <select id="existsByIdAndType" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1
+            FROM category
+            WHERE id = #{categoryId}
+              AND category_type = #{categoryType}
+        )
+    </select>
 </mapper>

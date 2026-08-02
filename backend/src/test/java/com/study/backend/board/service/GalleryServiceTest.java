@@ -23,6 +23,8 @@ import com.study.backend.board.exception.BoardPermissionDeniedException;
 import com.study.backend.board.mapper.GalleryMapper;
 import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
+import com.study.backend.category.model.CategoryType;
+import com.study.backend.category.service.CategoryService;
 import com.study.backend.file.exception.FileException;
 import com.study.backend.file.model.FileMetaData;
 import com.study.backend.file.service.FileService;
@@ -40,8 +42,25 @@ class GalleryServiceTest {
     @Mock FileService fileService;
     @Mock ThumbnailService thumbnailService;
     @Mock ApplicationEventPublisher eventPublisher;
+	@Mock CategoryService categoryService;
 
     @InjectMocks GalleryService galleryService;
+
+	@Test
+	@DisplayName("갤러리 등록 전에 회원용 카테고리인지 검증한다")
+	void createPostWithFilesAndThumbnail_validatesMemberCategory() {
+		Board board = Board.builder().id(1L).categoryId(1L).build();
+		org.springframework.web.multipart.MultipartFile[] files = {
+			mock(org.springframework.web.multipart.MultipartFile.class)
+		};
+		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
+		given(fileService.getFirstFileByBoardId(1L)).willReturn(fileMetaData());
+
+		galleryService.createPostWithFilesAndThumbnail(board, BoardType.GALLERIES.id(), 1L, files);
+
+		then(categoryService).should().validateCategory(1L, CategoryType.MEMBER);
+		then(galleryMapper).should().createPost(board, BoardType.GALLERIES.id(), 1L);
+	}
 
     // ── createFilesAndThumbnail ─────────────────────────────────────────
 
@@ -138,19 +157,22 @@ class GalleryServiceTest {
 	}
 
 	@Test
-	@DisplayName("수정 실패 시 새 이미지와 썸네일 물리 파일을 정리한다")
-	void updatePost_failureAfterThumbnail_cleanupCreatedFiles() throws Exception {
+	@DisplayName("수정 실패 시 새 파일만 정리하고 기존 썸네일은 보존한다")
+	void updatePost_failureAfterThumbnail_cleanupCreatedFilesAndPreserveOldThumbnail() throws Exception {
 		BoardUpdateRequest update = boardUpdate();
 		org.springframework.web.multipart.MultipartFile mockFile =
 			mock(org.springframework.web.multipart.MultipartFile.class);
 		org.springframework.web.multipart.MultipartFile[] files = { mockFile };
 		FileMetaData file = fileMetaData();
 		Path createdFile = Files.writeString(tempDir.resolve("created.png"), "new");
-		Path createdThumbnail = Files.writeString(tempDir.resolve("created.jpeg"), "thumb");
+		Path thumbnailDirectory = Files.createDirectories(tempDir.resolve("thumbnail"));
+		Path oldThumbnail = Files.writeString(thumbnailDirectory.resolve("stored.jpeg"), "old-thumb");
+		Path createdThumbnail = Files.writeString(thumbnailDirectory.resolve("created.jpeg"), "new-thumb");
+		ReflectionTestUtils.setField(galleryService, "storePath", tempDir.toString());
 
 		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
-		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
+		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(thumbnailMetaData());
 		given(fileService.createFiles(1L, files)).willReturn(List.of(createdFile));
 		given(fileService.getFirstFileByBoardId(1L)).willReturn(file);
 		given(thumbnailService.saveThumbnail(any(), eq(1L))).willReturn(createdThumbnail);
@@ -162,6 +184,7 @@ class GalleryServiceTest {
 
 		assertThat(Files.exists(createdFile)).isFalse();
 		assertThat(Files.exists(createdThumbnail)).isFalse();
+		assertThat(oldThumbnail).hasContent("old-thumb");
 	}
 
     // ── deletePost ──────────────────────────────────────────────────────
@@ -205,7 +228,7 @@ class GalleryServiceTest {
 	}
 
     private BoardUpdateRequest boardUpdate() {
-        return BoardUpdateRequest.builder().build();
+		return BoardUpdateRequest.builder().categoryId(1L).build();
     }
 
     private FileMetaData fileMetaData() {

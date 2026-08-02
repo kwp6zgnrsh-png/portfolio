@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -47,13 +48,14 @@ public class ThumbnailServiceImpl implements ThumbnailService {
 	/** 원본 이미지를 JPEG으로 변환·저장하고 썸네일 메타데이터를 DB에 등록한다. 원본 포맷과 관계없이 항상 JPEG으로 저장한다. */
 	@Override
 	public Path saveThumbnail(SourceImage sourceImage, Long boardId) {
-		String absolutePath = PathUtils.joinStoreFilePath(storePath, thumbnailPath, sourceImage.storeName(), ".jpeg");
+		String thumbnailStoreName = UUID.randomUUID().toString();
+		String absolutePath = PathUtils.joinStoreFilePath(storePath, thumbnailPath, thumbnailStoreName, ".jpeg");
 		Path savedThumbnailPath = Path.of(absolutePath);
 		long fileSize = saveThumbnailFile(sourceImage, absolutePath);
 
 		ThumbnailMetaData thumbnailMeta = ThumbnailMetaData.builder()
 			.fileName(sourceImage.fileName())
-			.storeName(sourceImage.storeName())
+			.storeName(thumbnailStoreName)
 			.extension(".jpeg")
 			.path(thumbnailPath)
 			.fileSize(fileSize)

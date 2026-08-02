@@ -99,16 +99,17 @@ class InquiryServiceTest {
     }
 
     @Test
-    @DisplayName("수정 시 비밀번호가 없으면 null로 설정된다")
-    void updatePost_noPassword_setNull() {
-        BoardUpdateRequest update = boardUpdate(null);
-        given(inquiryMapper.getPostById(1L)).willReturn(board(1L));
-        given(inquiryMapper.isReplied(1L)).willReturn(false);
+	@DisplayName("공개 여부가 누락되면 일반글로 정규화하고 비밀번호를 제거한다")
+	void updatePost_isSecretMissing_normalizesToPublic() {
+		BoardUpdateRequest update = boardUpdate(null);
+		given(inquiryMapper.getPostById(1L)).willReturn(board(1L));
+		given(inquiryMapper.isReplied(1L)).willReturn(false);
 
-        inquiryService.updatePost(1L, update, 1L);
+		inquiryService.updatePost(1L, update, 1L);
 
-        assertThat(update.getSecretPassword()).isNull();
-    }
+		assertThat(update.getIsSecret()).isFalse();
+		assertThat(update.getSecretPassword()).isNull();
+	}
 
     @Test
     @DisplayName("기존 비밀글 수정 시 새 비밀번호가 없으면 기존 비밀번호 해시를 유지한다")

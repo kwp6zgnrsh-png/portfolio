@@ -21,6 +21,8 @@ import com.study.backend.board.exception.BoardPermissionDeniedException;
 import com.study.backend.board.mapper.FreeBoardMapper;
 import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
+import com.study.backend.category.model.CategoryType;
+import com.study.backend.category.service.CategoryService;
 import com.study.backend.file.service.FileService;
 import com.study.backend.file.service.FileServiceFactory;
 
@@ -32,8 +34,20 @@ class FreeBoardServiceTest {
     @Mock FreeBoardMapper freeBoardMapper;
     @Mock FileServiceFactory fileServiceFactory;
     @Mock FileService fileService;
+	@Mock CategoryService categoryService;
 
     @InjectMocks FreeBoardService freeBoardService;
+
+	@Test
+	@DisplayName("게시글 등록 전에 회원용 카테고리인지 검증한다")
+	void createPost_validatesMemberCategory() {
+		Board board = Board.builder().categoryId(1L).build();
+
+		freeBoardService.createPost(board, BoardType.BOARDS.id(), 1L);
+
+		then(categoryService).should().validateCategory(1L, CategoryType.MEMBER);
+		then(freeBoardMapper).should().createPost(board, BoardType.BOARDS.id(), 1L);
+	}
 
     // ── updatePost ──────────────────────────────────────────────────────
 
@@ -156,6 +170,6 @@ class FreeBoardServiceTest {
 	}
 
     private BoardUpdateRequest boardUpdate() {
-        return BoardUpdateRequest.builder().build();
+		return BoardUpdateRequest.builder().categoryId(1L).build();
     }
 }

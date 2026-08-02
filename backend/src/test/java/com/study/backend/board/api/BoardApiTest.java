@@ -27,6 +27,7 @@ import com.study.backend.board.strategy.BoardDeleteStrategy;
 import com.study.backend.board.strategy.BoardReadableStrategy;
 import com.study.backend.board.strategy.BoardStrategyFactory;
 import com.study.backend.board.strategy.BoardUpdateStrategy;
+import com.study.backend.common.exception.AuthorizationException;
 import com.study.backend.common.interceptor.JwtAuthInterceptor;
 import com.study.backend.common.interceptor.LoginRateLimitInterceptor;
 import com.study.backend.common.util.JwtTokenProvider;
@@ -95,6 +96,55 @@ class BoardApiTest {
         mockMvc.perform(get("/api/boards").param("limit", "0"))
             .andExpect(status().isBadRequest());
     }
+
+	@Test
+	@DisplayName("존재하지 않는 날짜로 검색하면 400을 반환한다")
+	void searchBoardList_invalidDate_returns400() throws Exception {
+		allowInterceptors();
+
+		mockMvc.perform(get("/api/boards")
+				.param("startDate", "2026-02-30")
+				.param("endDate", "2026-03-01"))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@DisplayName("검색 시작일과 종료일 중 하나만 입력하면 400을 반환한다")
+	void searchBoardList_incompleteDateRange_returns400() throws Exception {
+		allowInterceptors();
+
+		mockMvc.perform(get("/api/boards")
+				.param("startDate", "2026-07-01"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("시작일과 종료일을 함께 입력해 주세요."));
+	}
+
+	@Test
+	@DisplayName("검색 시작일이 종료일보다 늦으면 400을 반환한다")
+	void searchBoardList_reversedDateRange_returns400() throws Exception {
+		allowInterceptors();
+
+		mockMvc.perform(get("/api/boards")
+				.param("startDate", "2026-07-15")
+				.param("endDate", "2026-07-01"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("시작일은 종료일보다 늦을 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("비로그인 상태에서 내 문의만 조회하면 401을 반환한다")
+	void searchBoardList_onlyMineWithoutLogin_returns401() throws Exception {
+		allowInterceptors();
+		Search search = Search.builder().page(1).limit(10).onlyMine(true).build();
+		given(boardConverter.convertToSearch(any())).willReturn(search);
+		given(boardStrategyFactory.requireReadableStrategy("inquiries")).willReturn(boardStrategy);
+		given(boardStrategy.searchPostList(search))
+			.willThrow(new AuthorizationException("내 문의만 조회하려면 로그인이 필요합니다."));
+
+		mockMvc.perform(get("/api/inquiries").param("onlyMine", "true"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("내 문의만 조회하려면 로그인이 필요합니다."));
+	}
 
     // ── boardDetail ─────────────────────────────────────────────────────
 

@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.study.backend.board.exception.InvalidBoardRequestException;
 import com.study.backend.board.exception.BoardTypeException;
 import com.study.backend.board.model.BoardType;
 import com.study.backend.category.mapper.CategoryMapper;
@@ -30,5 +31,16 @@ public class CategoryServiceImpl implements CategoryService {
 	@Override
 	public List<Category> getCategories(CategoryType categoryType) {
 		return categoryMapper.getCategories(categoryType.name());
+	}
+
+	/** 카테고리 ID가 존재하고 요청한 유형과 일치하는지 검증한다. */
+	@Override
+	public void validateCategory(Long categoryId, CategoryType categoryType) {
+		if (categoryId == null) {
+			throw new InvalidBoardRequestException("카테고리를 선택해 주세요.");
+		}
+		if (!categoryMapper.existsByIdAndType(categoryId, categoryType.name())) {
+			throw new InvalidBoardRequestException("유효하지 않은 카테고리입니다.");
+		}
 	}
 }

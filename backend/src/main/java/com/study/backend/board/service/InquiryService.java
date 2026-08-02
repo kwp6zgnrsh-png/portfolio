@@ -111,6 +111,7 @@ public class InquiryService extends AbstractBoardService<InquiryMapper> {
 	 */
 	private String resolveSecretPasswordForUpdate(Board existingBoard, BoardUpdateRequest updateBoard) {
 		if (!Boolean.TRUE.equals(updateBoard.getIsSecret())) {
+			updateBoard.setIsSecret(false);
 			return null;
 		}
 

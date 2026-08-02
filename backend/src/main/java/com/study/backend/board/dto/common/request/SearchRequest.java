@@ -1,5 +1,10 @@
 package com.study.backend.board.dto.common.request;
 
+import java.time.LocalDate;
+
+import org.springframework.format.annotation.DateTimeFormat;
+
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -15,8 +20,10 @@ import jakarta.validation.constraints.Size;
  * - direction: 정렬(방향) 조건
  */
 public record SearchRequest(
-	String startDate,
-	String endDate,
+	@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+	LocalDate startDate,
+	@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+	LocalDate endDate,
 	Long categoryId,
 	@Size(max = 100)
 	String searchWord,
@@ -36,5 +43,15 @@ public record SearchRequest(
 		if (limit == null) {
 			limit = 10;
 		}
+	}
+
+	@AssertTrue(message = "시작일과 종료일을 함께 입력해 주세요.")
+	public boolean isDateRangeComplete() {
+		return (startDate == null) == (endDate == null);
+	}
+
+	@AssertTrue(message = "시작일은 종료일보다 늦을 수 없습니다.")
+	public boolean isDateRangeOrdered() {
+		return startDate == null || endDate == null || !startDate.isAfter(endDate);
 	}
 }

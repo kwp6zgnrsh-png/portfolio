@@ -8,4 +8,5 @@ import com.study.backend.category.model.CategoryType;
 public interface CategoryService {
 	List<Category> getCategories(String boardType);
 	List<Category> getCategories(CategoryType categoryType);
+	void validateCategory(Long categoryId, CategoryType categoryType);
 }

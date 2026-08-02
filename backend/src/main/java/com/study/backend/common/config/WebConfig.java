@@ -34,9 +34,6 @@ public class WebConfig implements WebMvcConfigurer {
 	@Value("${store.base-path}")
 	private String storePath;
 
-	@Value("${free-board.path}")
-	private String freeBoardPath;
-
 	@Value("${gallery-board.picture.path}")
 	private String galleryPicturePath;
 
@@ -46,7 +43,6 @@ public class WebConfig implements WebMvcConfigurer {
 	/** 업로드된 이미지를 /images/{path}/** URL로 서빙하기 위한 정적 리소스 매핑. */
 	@Override
 	public void addResourceHandlers(@NonNull ResourceHandlerRegistry registry) {
-		addImageResourceHandler(registry, freeBoardPath);
 		addImageResourceHandler(registry, galleryPicturePath);
 		addImageResourceHandler(registry, galleryThumbnailPath);
 	}

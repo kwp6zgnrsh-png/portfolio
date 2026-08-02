@@ -49,6 +49,26 @@ class LoginRateLimitInterceptorTest {
         assertThat(response.getContentAsString()).contains("\"message\":\"요청이 너무 많습니다. 잠시 후 다시 시도해주세요.\"");
     }
 
+	@Test
+	@DisplayName("로그인 성공으로 같은 IP의 이전 시도 횟수를 초기화할 수 없다")
+	void afterCompletion_loginSuccess_doesNotResetIpAttempts() throws Exception {
+		for (int i = 0; i < 9; i++) {
+			MockHttpServletResponse failedResponse = new MockHttpServletResponse();
+			assertThat(interceptor.preHandle(request, failedResponse, new Object())).isTrue();
+			failedResponse.setStatus(HttpStatus.BAD_REQUEST.value());
+			interceptor.afterCompletion(request, failedResponse, new Object(), null);
+		}
+
+		MockHttpServletResponse successResponse = new MockHttpServletResponse();
+		assertThat(interceptor.preHandle(request, successResponse, new Object())).isTrue();
+		successResponse.setStatus(HttpStatus.OK.value());
+		interceptor.afterCompletion(request, successResponse, new Object(), null);
+
+		MockHttpServletResponse nextResponse = new MockHttpServletResponse();
+		assertThat(interceptor.preHandle(request, nextResponse, new Object())).isFalse();
+		assertThat(nextResponse.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+	}
+
     @Test
     @DisplayName("다른 IP는 독립적으로 카운팅된다")
     void preHandle_differentIps_countedSeparately() throws Exception {
