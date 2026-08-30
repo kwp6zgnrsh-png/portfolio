@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.exception.BoardNotFoundException;
 import com.study.backend.board.exception.BoardPermissionDeniedException;
 import com.study.backend.board.exception.BoardTypeException;
@@ -143,5 +144,11 @@ public class GlobalExceptionHandler {
 	public ApiResponse<Void> dataIntegrityViolationException(DataIntegrityViolationException e) {
 		log.error("DataIntegrityViolationException", e);
 		return ApiResponse.of("요청 데이터를 처리할 수 없습니다. 입력값을 확인해주세요.");
+	}
+
+	@ResponseStatus(HttpStatus.CONFLICT)
+	@ExceptionHandler(BoardConflictException.class)
+	public ApiResponse<Void> BoardConflictException(BoardConflictException e){
+		return ApiResponse.of(e.getMessage());
 	}
 }

@@ -11,7 +11,7 @@ public interface FreeBoardMapper extends BoardMapper {
 
 	void createPost(Board board, Long boardTypeId, Long memberId);
 
-	void updatePost(Long boardId, BoardUpdateRequest board, Long memberId);
+	int updatePost(Long boardId, BoardUpdateRequest board, Long memberId);
 
-	void deletePost(Long boardId, Long memberId);
+	int deletePost(Long boardId, Long memberId);
 }

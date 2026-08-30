@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.study.backend.board.dto.common.request.BoardUpdateRequest;
+import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.exception.BoardNotFoundException;
 import com.study.backend.board.exception.BoardPermissionDeniedException;
 import com.study.backend.board.mapper.FreeBoardMapper;
@@ -81,12 +82,14 @@ class FreeBoardServiceTest {
             .isInstanceOf(BoardPermissionDeniedException.class);
     }
 
+	//TODO: 테스트 이름 수정
     @Test
     @DisplayName("작성자 본인이면 수정이 정상 처리된다")
     void updatePost_owner_success() {
 		BoardUpdateRequest update = boardUpdate();
 		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
-		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
+		then(fileServiceFactory).shouldHaveNoInteractions();
+		given(freeBoardMapper.updatePost(1L, update, 1L)).willReturn(1);
 
         assertThatNoException().isThrownBy(() -> freeBoardService.updatePost(1L, update, 1L, null));
         then(freeBoardMapper).should().updatePost(1L, update, 1L);
@@ -100,10 +103,14 @@ class FreeBoardServiceTest {
             mock(org.springframework.web.multipart.MultipartFile.class);
         org.springframework.web.multipart.MultipartFile[] files = { mockFile };
 
+		given(mockFile.isEmpty()).willReturn(false);
+
 		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
 
-        freeBoardService.updatePost(1L, update, 1L, files);
+		given(freeBoardMapper.updatePost(1L, update, 1L)).willReturn(1);
+
+		freeBoardService.updatePost(1L, update, 1L, files);
 
         then(fileService).should().createFiles(eq(1L), eq(files));
     }
@@ -117,6 +124,7 @@ class FreeBoardServiceTest {
 		org.springframework.web.multipart.MultipartFile[] files = { mockFile };
 		Path createdFile = Files.writeString(tempDir.resolve("created.png"), "new");
 
+		given(mockFile.isEmpty()).willReturn(false);
 		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
 		given(fileService.createFiles(1L, files)).willReturn(List.of(createdFile));
@@ -154,10 +162,28 @@ class FreeBoardServiceTest {
     void deletePost_owner_success() {
 		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
-
+		given(freeBoardMapper.deletePost(1L, 1L))
+			.willReturn(1);
         assertThatNoException().isThrownBy(() -> freeBoardService.deletePost(1L, 1L));
         then(freeBoardMapper).should().deletePost(1L, 1L);
     }
+
+	@Test
+	@DisplayName("오래된 버전으로 수정하면 충돌 예외를 던진다")
+	void updatePost_staleVersion_throwsConflict() {
+		BoardUpdateRequest update = boardUpdate();
+
+		given(freeBoardMapper.getPostById(1L))
+			.willReturn(board(1L));
+		given(freeBoardMapper.updatePost(1L, update, 1L))
+			.willReturn(0);
+
+		assertThatThrownBy(
+			() -> freeBoardService.updatePost(1L, update, 1L, null)
+		)
+			.isInstanceOf(BoardConflictException.class)
+			.hasMessage("게시글 상태가 변경되어 수정할 수 없습니다.");
+	}
 
     // ── helpers ─────────────────────────────────────────────────────────
 
@@ -169,7 +195,12 @@ class FreeBoardServiceTest {
 		return Board.builder().id(1L).memberId(memberId).boardTypeId(boardType.id()).build();
 	}
 
-    private BoardUpdateRequest boardUpdate() {
-		return BoardUpdateRequest.builder().categoryId(1L).build();
-    }
+	private BoardUpdateRequest boardUpdate() {
+		return BoardUpdateRequest.builder()
+			.title("제목")
+			.content("내용")
+			.categoryId(1L)
+			.version(0)
+			.build();
+	}
 }

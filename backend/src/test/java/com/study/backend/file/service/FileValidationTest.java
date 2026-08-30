@@ -3,10 +3,15 @@ package com.study.backend.file.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+
+import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -90,12 +95,14 @@ class FileValidationTest {
 	void createFiles_jpegNamedHtml_usesCanonicalJpgExtension() throws Exception {
 		Path uploadDirectory = Files.createDirectories(tempDir.resolve("test"));
 		TestFileService uploadService = new TestFileService(fileMapper, tempDir.toString());
-		byte[] jpegPolyglot = {
-			(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0,
-			'<', 's', 'c', 'r', 'i', 'p', 't', '>'
-		};
+
+		byte[] jpeg = createImageBytes();
+
 		MockMultipartFile file = new MockMultipartFile(
-			"file", "evil.html", "image/jpeg", jpegPolyglot
+			"file",
+			"evil.html",
+			"image/jpeg",
+			jpeg
 		);
 
 		List<Path> savedPaths = uploadService.createFiles(1L, new MockMultipartFile[]{file});
@@ -141,8 +148,8 @@ class FileValidationTest {
 	@Test
 	@DisplayName("수정 후 총 파일 개수가 최대 개수를 넘으면 예외를 던진다")
 	void validateFileCountForUpdate_finalCountExceedsMax_throws() {
-		given(fileMapper.getFilesByBoardId(1L)).willReturn(existingFiles(5));
-		MockMultipartFile newFile = jpegFile("new.jpg");
+		given(fileMapper.getFilesByBoardId(1L)).willReturn(existingFiles());
+		MockMultipartFile newFile = jpegFile();
 
 		assertThatThrownBy(() -> fileService.validateFileCountForUpdate(1L, null, new MockMultipartFile[]{newFile}))
 			.isInstanceOf(FileException.class)
@@ -152,8 +159,8 @@ class FileValidationTest {
 	@Test
 	@DisplayName("기존 파일을 삭제한 만큼 새 파일을 추가할 수 있다")
 	void validateFileCountForUpdate_deleteThenAdd_passes() {
-		given(fileMapper.getFilesByBoardId(1L)).willReturn(existingFiles(5));
-		MockMultipartFile newFile = jpegFile("new.jpg");
+		given(fileMapper.getFilesByBoardId(1L)).willReturn(existingFiles());
+		MockMultipartFile newFile = jpegFile();
 
 		assertThatNoException().isThrownBy(() ->
 			fileService.validateFileCountForUpdate(1L, new String[]{"1"}, new MockMultipartFile[]{newFile})
@@ -163,7 +170,7 @@ class FileValidationTest {
 	@Test
 	@DisplayName("삭제 요청 파일이 게시글 파일이 아니면 예외를 던진다")
 	void validateFileCountForUpdate_invalidDeleteFile_throws() {
-		given(fileMapper.getFilesByBoardId(1L)).willReturn(existingFiles(5));
+		given(fileMapper.getFilesByBoardId(1L)).willReturn(existingFiles());
 
 		assertThatThrownBy(() -> fileService.validateFileCountForUpdate(1L, new String[]{"99"}, null))
 			.isInstanceOf(FileException.class)
@@ -180,13 +187,95 @@ class FileValidationTest {
 			.isEqualTo("/store/gallery/");
 	}
 
-	private MockMultipartFile jpegFile(String fileName) {
-		byte[] jpegHeader = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0, 0};
-		return new MockMultipartFile("file", fileName, "image/jpeg", jpegHeader);
+	@Test
+	@DisplayName("여러 이미지가 모두 정상 해상도이면 전부 저장한다")
+	void createFiles_multipleValidImages_savesAllFiles() throws Exception {
+		Path uploadDirectory =
+			Files.createDirectories(tempDir.resolve("test"));
+
+		TestFileService uploadService =
+			new TestFileService(fileMapper, tempDir.toString());
+
+		MockMultipartFile firstImage = new MockMultipartFile(
+			"file",
+			"first.png",
+			"image/png",
+			createPngBytes(10, 10)
+		);
+
+		MockMultipartFile secondImage = new MockMultipartFile(
+			"file",
+			"second.png",
+			"image/png",
+			createPngBytes(20, 20)
+		);
+
+		List<Path> savedPaths = uploadService.createFiles(
+			1L,
+			new MockMultipartFile[]{firstImage, secondImage}
+		);
+
+		assertThat(savedPaths).hasSize(2);
+		assertThat(savedPaths).allSatisfy(path ->
+			assertThat(path).exists()
+		);
+
+		then(fileMapper)
+			.should(times(2))
+			.createFile(any(FileMetaData.class));
+
+		assertThat(uploadDirectory).isDirectory();
 	}
 
-	private List<FileMetaData> existingFiles(int count) {
-		return java.util.stream.LongStream.rangeClosed(1, count)
+	@Test
+	@DisplayName("두 번째 이미지의 해상도가 초과되면 앞서 저장한 파일까지 정리한다")
+	void createFiles_secondImageTooWide_deletesAllWrittenFiles()
+		throws Exception {
+
+		Path uploadDirectory =
+			Files.createDirectories(tempDir.resolve("test"));
+
+		TestFileService uploadService =
+			new TestFileService(fileMapper, tempDir.toString());
+
+		MockMultipartFile validImage = new MockMultipartFile(
+			"file",
+			"valid.png",
+			"image/png",
+			createPngBytes(10, 10)
+		);
+
+		MockMultipartFile oversizedImage = new MockMultipartFile(
+			"file",
+			"oversized.png",
+			"image/png",
+			createPngBytes(8_001, 1)
+		);
+
+		assertThatThrownBy(() ->
+			uploadService.createFiles(
+				1L,
+				new MockMultipartFile[]{
+					validImage,
+					oversizedImage
+				}
+			)
+		)
+			.isInstanceOf(FileException.class)
+			.hasMessage("이미지 해상도가 너무 큽니다");
+
+		try (var remainingFiles = Files.list(uploadDirectory)) {
+			assertThat(remainingFiles.toList()).isEmpty();
+		}
+	}
+
+	private MockMultipartFile jpegFile() {
+		byte[] jpegHeader = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0, 0};
+		return new MockMultipartFile("file", "new.jpg", "image/jpeg", jpegHeader);
+	}
+
+	private List<FileMetaData> existingFiles() {
+		return java.util.stream.LongStream.rangeClosed(1, 5)
 			.mapToObj(id -> FileMetaData.builder()
 				.id(id)
 				.fileName("file" + id + ".jpg")
@@ -196,6 +285,33 @@ class FileValidationTest {
 				.boardId(1L)
 				.build())
 			.toList();
+	}
+
+	private byte[] createPngBytes(int width, int height)
+		throws Exception {
+
+		BufferedImage image = new BufferedImage(
+			width,
+			height,
+			BufferedImage.TYPE_INT_RGB
+		);
+
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		ImageIO.write(image, "png", output);
+
+		return output.toByteArray();
+	}
+
+	private byte[] createImageBytes()
+		throws IOException {
+
+		BufferedImage image =
+			new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
+
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		ImageIO.write(image, "jpeg", output);
+
+		return output.toByteArray();
 	}
 
     // ── 테스트용 구체 구현 ────────────────────────────────────────────────

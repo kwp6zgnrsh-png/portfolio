@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.study.backend.board.dto.common.request.BoardUpdateRequest;
+import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.mapper.GalleryMapper;
 import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
@@ -22,10 +23,11 @@ import com.study.backend.file.exception.FileException;
 import com.study.backend.file.model.FileMetaData;
 import com.study.backend.file.service.FileService;
 import com.study.backend.file.service.FileServiceFactory;
+import com.study.backend.file.util.FileChangeUtils;
+import com.study.backend.file.util.FileCleanupHelper;
 import com.study.backend.file.util.PathUtils;
 import com.study.backend.thumbnail.dto.SourceImage;
 import com.study.backend.thumbnail.model.ThumbnailMetaData;
-import com.study.backend.file.util.FileCleanupHelper;
 import com.study.backend.thumbnail.service.ThumbnailService;
 
 import lombok.extern.slf4j.Slf4j;
@@ -93,6 +95,15 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 		validateOwnership(updateBoard, memberId, "수정할 수 있는 권한이 없습니다.");
 		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 
+		boolean hasNewFiles = FileChangeUtils.hasNewFiles(files);
+
+		boolean hasDeletedFiles = FileChangeUtils.hasDeletedFiles(board.getDeleteFiles());
+
+		if (!hasNewFiles && !hasDeletedFiles) {
+			updateBoardData(boardId, board, memberId);
+			return;
+		}
+
 		FileService fs = fileService.getFileService(BoardType.GALLERIES);
 
 		List<Path> createdFiles = new ArrayList<>();
@@ -103,7 +114,7 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 
 			fs.validateFileCountForUpdate(boardId, board.getDeleteFiles(), files);
 			fs.deleteFiles(boardId, board.getDeleteFiles());
-			if (files != null && files.length > 0) {
+			if (hasNewFiles) {
 				FileCleanupHelper.addFiles(createdFiles, fs.createFiles(boardId, files));
 			}
 
@@ -117,7 +128,12 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 				createdFiles.add(thumbnailPath);
 			}
 			publishThumbnailDeleteEventIfChanged(oldThumbnail, thumbnailPath);
-			mapper.updatePost(boardId, board, memberId);
+
+			int affectedRows = mapper.updatePost(boardId, board, memberId);
+			if (affectedRows != 1) {
+				throw new BoardConflictException("게시글 상태가 변경되어 수정할 수 없습니다.");
+			}
+
 		} catch (RuntimeException e) {
 			FileCleanupHelper.cleanupFiles(createdFiles);
 			throw e;
@@ -139,7 +155,12 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 
 		ThumbnailMetaData thumbnail = thumbnailService.getThumbnailByBoardId(boardId);
 
-		mapper.deletePost(boardId, memberId);
+		int affectedRows = mapper.deletePost(boardId, memberId);
+		if (affectedRows != 1) {
+			throw new BoardConflictException("이미 삭제되었거나 상태가 변경된 게시글입니다.");
+
+		}
+
 		fileService.getFileService(BoardType.GALLERIES).deleteAllFilesByBoardId(boardId);
 		thumbnailService.deleteThumbnail(boardId);
 
@@ -196,6 +217,14 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 			} catch (IOException cleanupException) {
 				log.error("갤러리 생성 실패 후 파일 정리 실패: {}", path, cleanupException);
 			}
+		}
+	}
+
+	private void updateBoardData(Long boardId, BoardUpdateRequest board, Long memberId) {
+		int affectedRows = mapper.updatePost(boardId, board, memberId);
+
+		if (affectedRows != 1) {
+			throw new BoardConflictException("게시글 상태가 변경되어 수정할 수 없습니다.");
 		}
 	}
 

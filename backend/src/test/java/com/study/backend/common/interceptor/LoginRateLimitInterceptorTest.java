@@ -125,29 +125,59 @@ class LoginRateLimitInterceptorTest {
     }
 
     @Test
-    @DisplayName("비밀글 비밀번호 검증 성공(2xx) 시 실패 누적이 초기화된다")
-    void afterCompletion_secretVerifySuccess_resetsFailures() throws Exception {
+    @DisplayName("비밀글 검증 성공 후에도 요청 횟수는 초기화되지 않는다")
+    void afterCompletion_secretVerifySuccess_doesNotResetAttempts()
+        throws Exception {
+
         MockHttpServletRequest secretRequest = new MockHttpServletRequest();
+
         secretRequest.setRequestURI("/api/inquiries/1/verifySecretPostPassword");
         secretRequest.setRemoteAddr("127.0.0.1");
 
+        // 앞선 요청 4회
         for (int i = 0; i < 4; i++) {
             MockHttpServletResponse failedResponse = new MockHttpServletResponse();
-            assertThat(interceptor.preHandle(secretRequest, failedResponse, new Object())).isTrue();
-            failedResponse.setStatus(HttpStatus.FORBIDDEN.value());
-            interceptor.afterCompletion(secretRequest, failedResponse, new Object(), null);
+
+            assertThat(
+                interceptor.preHandle(
+                    secretRequest,
+                    failedResponse,
+                    new Object()
+                )
+            ).isTrue();
         }
 
+        // 성공한 요청도 5번째 요청으로 누적
         MockHttpServletResponse successResponse = new MockHttpServletResponse();
-        assertThat(interceptor.preHandle(secretRequest, successResponse, new Object())).isTrue();
-        successResponse.setStatus(HttpStatus.OK.value());
-        interceptor.afterCompletion(secretRequest, successResponse, new Object(), null);
 
-        for (int i = 0; i < 5; i++) {
-            MockHttpServletResponse failedResponse = new MockHttpServletResponse();
-            assertThat(interceptor.preHandle(secretRequest, failedResponse, new Object())).isTrue();
-            failedResponse.setStatus(HttpStatus.FORBIDDEN.value());
-            interceptor.afterCompletion(secretRequest, failedResponse, new Object(), null);
-        }
+        assertThat(
+            interceptor.preHandle(
+                secretRequest,
+                successResponse,
+                new Object()
+            )
+        ).isTrue();
+
+        successResponse.setStatus(HttpStatus.OK.value());
+
+        interceptor.afterCompletion(
+            secretRequest,
+            successResponse,
+            new Object(),
+            null
+        );
+
+        // 성공했어도 초기화되지 않으므로 6번째 요청은 차단
+        MockHttpServletResponse blockedResponse = new MockHttpServletResponse();
+
+        assertThat(
+            interceptor.preHandle(
+                secretRequest,
+                blockedResponse,
+                new Object()
+            )
+        ).isFalse();
+
+        assertThat(blockedResponse.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
     }
 }

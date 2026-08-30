@@ -29,25 +29,29 @@ public class HomeApi {
 	private final BoardConverter boardConverter;
 	private final Executor boardQueryExecutor;
 
-	/** 홈 화면에 표시할 공지사항, 자유게시판, 갤러리, 문의사항 목록을 비동기로 조회한다. */
+	/**
+	 * 홈 화면에 표시할 공지사항, 자유게시판, 갤러리, 문의사항 목록을 비동기로 조회한다.
+	 * 각 게시판 영역은 독립적으로 조회한다.
+	 * 일부 조회가 실패하면 해당 영역만 빈 목록으로 반환하고 나머지는 정상 제공한다.
+	 */
 	@Public
 	@GetMapping("/home")
 	public ApiResponse<?> home() {
 		CompletableFuture<List<Board>> noticesFuture = CompletableFuture
 				.supplyAsync(() -> boardStrategyFactory.requireReadableStrategy(BoardType.NOTICES.name()).getPostList(), boardQueryExecutor)
-			.exceptionally(e -> { log.error("notices 조회 실패", e); return List.of(); });
+				.exceptionally(e -> { log.error("notices 조회 실패", e); return List.of(); });
 
 		CompletableFuture<List<Board>> boardsFuture = CompletableFuture
 				.supplyAsync(() -> boardStrategyFactory.requireReadableStrategy(BoardType.BOARDS.name()).getPostList(), boardQueryExecutor)
-			.exceptionally(e -> { log.error("boards 조회 실패", e); return List.of(); });
+				.exceptionally(e -> { log.error("boards 조회 실패", e); return List.of(); });
 
 		CompletableFuture<List<Board>> galleriesFuture = CompletableFuture
 				.supplyAsync(() -> boardStrategyFactory.requireReadableStrategy(BoardType.GALLERIES.name()).getPostList(), boardQueryExecutor)
-			.exceptionally(e -> { log.error("galleries 조회 실패", e); return List.of(); });
+				.exceptionally(e -> { log.error("galleries 조회 실패", e); return List.of(); });
 
 		CompletableFuture<List<Board>> inquiriesFuture = CompletableFuture
 				.supplyAsync(() -> boardStrategyFactory.requireReadableStrategy(BoardType.INQUIRIES.name()).getPostList(), boardQueryExecutor)
-			.exceptionally(e -> { log.error("inquiries 조회 실패", e); return List.of(); });
+				.exceptionally(e -> { log.error("inquiries 조회 실패", e); return List.of(); });
 
 		CompletableFuture.allOf(noticesFuture, boardsFuture, galleriesFuture, inquiriesFuture).join();
 

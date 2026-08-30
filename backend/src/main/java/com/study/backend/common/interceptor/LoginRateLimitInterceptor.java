@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -30,8 +31,8 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 	/** 1분 내 허용 최대 로그인 시도 횟수 */
 	private static final int LOGIN_MAX_ATTEMPTS = 10;
 
-	/** 1분 내 허용 최대 비밀글 비밀번호 실패 횟수 */
-	private static final int SECRET_VERIFY_MAX_FAILED_ATTEMPTS = 5;
+	/** 1분 내 허용 최대 비밀글 비밀번호 검증 횟수 */
+	private static final int SECRET_VERIFY_MAX_ATTEMPTS = 5;
 
 	/** 슬라이딩 윈도우 크기 (밀리초 단위, 1분) */
 	private static final long WINDOW_MS = 60_000L;
@@ -42,8 +43,8 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 	/** 로그인: IP별 요청 타임스탬프 */
 	private final Map<String, long[]> loginAttempts = new ConcurrentHashMap<>();
 
-	/** 비밀글 비밀번호 검증: IP + boardId별 실패 타임스탬프 */
-	private final Map<String, long[]> secretVerifyFailedAttempts = new ConcurrentHashMap<>();
+	/** 비밀글 비밀번호 검증: IP + boardId별 요청 타임스탬프 */
+	private final Map<String, long[]> secretVerifyAttempts = new ConcurrentHashMap<>();
 
 	private final ObjectMapper objectMapper;
 
@@ -59,11 +60,11 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 		loginAttempts.entrySet().removeIf(entry ->
 			Arrays.stream(entry.getValue()).allMatch(t -> now - t >= WINDOW_MS)
 		);
-		secretVerifyFailedAttempts.entrySet().removeIf(entry ->
-			Arrays.stream(entry.getValue()).allMatch(t -> now - t >= WINDOW_MS)
+		secretVerifyAttempts.entrySet().removeIf(entry ->
+			Arrays.stream(entry.getValue())
+				.allMatch(timestamp -> now - timestamp >= WINDOW_MS)
 		);
 	}
-
 
 	 /** 로그인 및 비밀글 검증 요청에 대해 슬라이딩 윈도우 기반 Rate Limit을 적용한다.*/
 	@Override
@@ -72,10 +73,9 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 		String ip = resolveClientIp(request);
 		long now = Instant.now().toEpochMilli();
 
-		if (isLoginPath(request)) {
-			long[] current = recordAttempt(loginAttempts, ip, now);
-			// 윈도우 내 시도 횟수가 최대치를 초과하면 429 반환
-			if (current.length > LOGIN_MAX_ATTEMPTS) {
+		if(isLoginPath(request)) {
+			boolean allowed = tryRecordAttempt(loginAttempts, ip, now, LOGIN_MAX_ATTEMPTS);
+			if(!allowed) {
 				writeTooManyRequests(response);
 				return false;
 			}
@@ -84,54 +84,27 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 
 		if (isSecretVerifyPath(request)) {
 			String boardId = extractBoardIdFromSecretVerifyPath(request);
+
 			if (boardId == null) {
 				return true;
+
 			}
 			String attemptKey = buildSecretAttemptKey(ip, boardId);
-			long[] currentFailures = filterRecentAttempts(secretVerifyFailedAttempts, attemptKey, now);
-			// 실패 횟수 기준으로 차단한다. 성공 응답은 afterCompletion에서 실패 카운트를 초기화한다.
-			if (currentFailures.length >= SECRET_VERIFY_MAX_FAILED_ATTEMPTS) {
+
+			boolean allowed =tryRecordAttempt(
+				secretVerifyAttempts,
+				attemptKey,
+				now,
+				SECRET_VERIFY_MAX_ATTEMPTS
+			);
+
+			if(!allowed) {
 				writeTooManyRequests(response);
 				return false;
 			}
 		}
 
 		return true;
-	}
-
-	/** 비밀글 검증 결과에 따라 해당 IP + 게시글의 실패 카운트를 기록하거나 초기화한다. */
-	@Override
-	public void afterCompletion(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
-		@NonNull Object handler, Exception ex) {
-		int status = response.getStatus();
-
-		if (isLoginPath(request)) {
-			return;
-		}
-
-		if (!isSecretVerifyPath(request)) {
-			return;
-		}
-
-		String boardId = extractBoardIdFromSecretVerifyPath(request);
-		if (boardId == null) {
-			return;
-		}
-
-		String attemptKey = buildSecretAttemptKey(resolveClientIp(request), boardId);
-
-		if (status == HttpStatus.FORBIDDEN.value()) {
-			recordAttempt(secretVerifyFailedAttempts, attemptKey, Instant.now().toEpochMilli());
-			return;
-		}
-		if (isSuccessStatus(status)) {
-			secretVerifyFailedAttempts.remove(attemptKey);
-		}
-	}
-
-	/** HTTP 응답 상태가 성공 범위(2xx)인지 확인한다. */
-	private boolean isSuccessStatus(int status) {
-		return status >= 200 && status < 300;
 	}
 
 	/** 현재 nginx 등 리버스 프록시를 사용하지 않으므로 RemoteAddr로 실제 클라이언트 IP를 직접 가져옴 */
@@ -169,32 +142,29 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 		return ip + ":" + boardId;
 	}
 
-	/** 슬라이딩 윈도우 내 기존 기록에 현재 시각을 추가하고 반환한다. */
-	private long[] recordAttempt(Map<String, long[]> attempts, String key, long now) {
-		return attempts.compute(key, (k, timestamps) -> {
-			if (timestamps == null) {
-				return new long[] { now };
+	/**
+	 * 키별 슬라이딩 윈도우의 시도 횟수를 원자적으로 확인한다.
+	 * 제한 미만이면 현재 시각을 기록하고 true를 반환하며,
+	 * 제한에 도달하면 기록하지 않고 false를 반환한다.
+	 */
+	private boolean tryRecordAttempt(Map<String, long[]> attempts, String key, long now, int maxAttempts){
+		AtomicBoolean allowed = new AtomicBoolean(false);
+
+		attempts.compute(key, (k, timestamps) -> {
+			long[] recent = timestamps == null ? new long[0] : Arrays.stream(timestamps).filter(t -> now - t < WINDOW_MS).toArray();
+
+			if(recent.length >= maxAttempts) {
+				return recent;
 			}
-			long[] recent = Arrays.stream(timestamps)
-				.filter(t -> now - t < WINDOW_MS)
-				.toArray();
-			long[] updated = new long[recent.length + 1];
-			System.arraycopy(recent, 0, updated, 0, recent.length);
+
+			long[] updated = Arrays.copyOf(recent, recent.length + 1);
 			updated[recent.length] = now;
+			allowed.set(true);
+
 			return updated;
 		});
-	}
 
-	/** 슬라이딩 윈도우 밖의 기록을 제거하고 남은 기록만 반환한다. */
-	private long[] filterRecentAttempts(Map<String, long[]> attempts, String key, long now) {
-		return attempts.compute(key, (k, timestamps) -> {
-			if (timestamps == null) {
-				return new long[0];
-			}
-			return Arrays.stream(timestamps)
-				.filter(t -> now - t < WINDOW_MS)
-				.toArray();
-		});
+		return allowed.get();
 	}
 
 	/** 429 Too Many Requests 응답을 JSON으로 작성한다. */

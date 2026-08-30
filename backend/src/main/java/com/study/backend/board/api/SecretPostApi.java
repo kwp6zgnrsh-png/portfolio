@@ -32,8 +32,8 @@ public class SecretPostApi {
 	@Public
 	@PostMapping("/{boardType}/{id}/verifyMySecretPost")
 	public ApiResponse<?> verifyMySecretPost(@PathVariable String boardType,
-										  @PathVariable("id") Long boardId,
-										  @LoginMember(required = false) Long memberId) {
+										     @PathVariable("id") Long boardId,
+										     @LoginMember(required = false) Long memberId) {
 
 		boolean isOwner = boardStrategyFactory.requireSecretStrategy(boardType).isPostOwner(boardId, memberId);
 
@@ -48,9 +48,9 @@ public class SecretPostApi {
 	@Public
 	@PostMapping("/{boardType}/{id}/verifySecretPostPassword")
 	public ApiResponse<?> verifySecretPostPassword(@PathVariable String boardType,
-											 @PathVariable("id") Long boardId,
-											 @RequestBody @Valid SecretPostPasswordRequest requestPassword,
-											 HttpServletResponse response) {
+												   @PathVariable("id") Long boardId,
+											       @RequestBody @Valid SecretPostPasswordRequest requestPassword,
+											       HttpServletResponse response) {
 
 		boardStrategyFactory.requireSecretStrategy(boardType)
 			.verifySecretPassword(boardId, requestPassword.password());

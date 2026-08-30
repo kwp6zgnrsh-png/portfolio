@@ -1,6 +1,7 @@
 package com.study.backend.board.dto.common.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -29,4 +30,7 @@ public class BoardUpdateRequest {
 
 	@Pattern(regexp = "^$|^\\d{4}$", message = "비공개 시 비밀번호는 숫자 4자리가 필요합니다")
 	private String secretPassword;
+
+	@NotNull(message = "게시글 버전이 필요합니다.")
+	private Integer version;
 }

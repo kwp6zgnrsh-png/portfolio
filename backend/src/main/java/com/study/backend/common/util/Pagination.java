@@ -13,7 +13,7 @@ public class Pagination {
 	public Page pagination(Integer postCount, Integer page, Integer limit){
 		int safeLimit = (limit == null || limit <= 0) ? 10 : limit;
 		int safePostCount = (postCount == null || postCount < 0) ? 0 : postCount;
-		int totalPages = safePostCount == 0 ? 1 : (safePostCount + safeLimit - 1) / safeLimit;
+		int totalPages = safePostCount == 0 ? 1 : (int) (((long) safePostCount + safeLimit - 1) / safeLimit);
 		int currentPage = (page == null || page <= 0) ? 1 : Math.min(page, totalPages);
 		int startPage = ((currentPage - 1) / PAGES_TO_DISPLAY) * PAGES_TO_DISPLAY + 1;
 		int endPage = Math.min(startPage + PAGES_TO_DISPLAY - 1, totalPages);

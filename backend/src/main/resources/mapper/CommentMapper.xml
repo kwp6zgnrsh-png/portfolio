@@ -9,7 +9,8 @@
                state
         FROM board
         WHERE id = #{boardId}
-    </select>
+        FOR SHARE
+        </select>
 
     <select id="getCommentById" resultType="com.study.backend.comment.model.Comment">
         SELECT co.id,

@@ -20,6 +20,7 @@ const form = reactive({
   title: '',
   isSecret: false,
   secretPassword: null,
+  version: null,
 });
 
 const rules = computed(() => ({
@@ -52,6 +53,7 @@ const getPost = async () => {
 
 const setFormData = (data) => {
   form.id = data.id;
+  form.version = data.version;
   form.content = data.content;
   form.title = data.title;
   form.isSecret = data.isSecret;
@@ -63,6 +65,7 @@ const createForm = () => {
   formData.append('content', form.content);
   formData.append('isSecret', form.isSecret);
   formData.append('secretPassword', form.secretPassword ?? '');
+  formData.append('version', String(form.version));
   return formData;
 }
 

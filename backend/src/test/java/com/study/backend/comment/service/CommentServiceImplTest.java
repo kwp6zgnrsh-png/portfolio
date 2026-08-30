@@ -105,7 +105,10 @@ class CommentServiceImplTest {
 	void deleteComment_owner_succeeds() {
 		given(commentMapper.getCommentById(1L)).willReturn(comment(1L, 1L, 1L));
 
+		given(commentMapper.deleteComment(1L, 1L)).willReturn(1);
+
 		assertThatNoException().isThrownBy(() -> commentService.deleteComment(1L, 1L));
+
 		then(commentMapper).should().deleteComment(1L, 1L);
 	}
 

@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.1.0, for macos13 (arm64)
 --
--- Host: 127.0.0.1    Database: ebrainsoft_study
+-- Host: 127.0.0.1    Database: board
 -- ------------------------------------------------------
 -- Server version	8.0.39
 
@@ -72,6 +72,7 @@ CREATE TABLE `board` (
   `manager_id` int DEFAULT NULL,
   `secret_password` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `state` tinyint(1) DEFAULT '0',
+  `version` int NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `FK_category_TO_board_1` (`category_id`),
   KEY `FK_member_TO_board_1` (`member_id`),

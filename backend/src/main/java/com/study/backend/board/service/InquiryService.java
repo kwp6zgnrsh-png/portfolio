@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.study.backend.board.dto.common.request.BoardUpdateRequest;
+import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.exception.BoardPermissionDeniedException;
 import com.study.backend.board.exception.InvalidBoardRequestException;
 import com.study.backend.board.mapper.InquiryMapper;
@@ -33,15 +34,24 @@ public class InquiryService extends AbstractBoardService<InquiryMapper> {
 	/** 비밀번호가 변경되면 재암호화 후 문의 게시글을 수정한다. 작성자 본인만 가능하다. */
 	@Transactional
 	public void updatePost(Long boardId, BoardUpdateRequest board, Long memberId) {
+		if (board.getIsSecret() == null) {
+			throw new InvalidBoardRequestException("공개 여부가 필요합니다.");
+		}
+
 		Board updateBoard = mapper.getPostById(boardId);
 		validateOwnership(updateBoard, memberId, "수정할 수 있는 권한이 없습니다.");
+
 		if (mapper.isReplied(boardId)) {
 			throw new BoardPermissionDeniedException("답변이 완료된 문의는 수정할 수 없습니다.");
 		}
 
 		board.setSecretPassword(resolveSecretPasswordForUpdate(updateBoard, board));
 
-		mapper.updatePost(boardId, board, memberId);
+		int affectedRows = mapper.updatePost(boardId, board, memberId);
+
+		if (affectedRows != 1) {
+			throw new BoardConflictException("게시글 상태가 변경되어 수정할 수 없습니다.");
+		}
 	}
 
 	/** 수정 폼에 필요한 게시글을 조회한다. 존재하지 않거나 작성자가 아니면 예외를 던진다. */
@@ -94,7 +104,11 @@ public class InquiryService extends AbstractBoardService<InquiryMapper> {
 	public void deletePost(Long boardId, Long memberId) {
 		Board board = mapper.getPostById(boardId);
 		validateOwnership(board, memberId, "삭제할 수 있는 권한이 없습니다.");
-		mapper.deletePost(boardId, memberId);
+		int affectedRows = mapper.deletePost(boardId, memberId);
+		if (affectedRows != 1) {
+			throw new BoardConflictException("이미 삭제되었거나 상태가 변경된 게시글입니다.");
+
+		}
 	}
 
 	/** 비밀글이면 비밀번호를 암호화하여 반환하고, 아니면 null을 반환한다. */

@@ -36,11 +36,14 @@ public class CommentServiceImpl implements CommentService {
 		if (board == null || Boolean.TRUE.equals(board.getState())) {
 			throw new CommentTargetNotAllowedException("댓글을 작성할 수 없는 게시글입니다.");
 		}
+
 		BoardType boardType = BoardType.fromId(board.getBoardTypeId());
 		if (!boardType.supportsComment()) {
 			throw new CommentTargetNotAllowedException("댓글을 작성할 수 없는 게시글입니다.");
 		}
+
 		commentMapper.createComment(comment);
+
 		// author(회원명), createdDate(DB 기본값)를 반영하기 위해 재조회
 		return commentMapper.getCommentById(comment.getId());
 	}
@@ -53,9 +56,14 @@ public class CommentServiceImpl implements CommentService {
 		if (comment == null) {
 			throw new CommentNotFoundException("존재하지 않는 댓글입니다.");
 		}
+
 		if (!Objects.equals(comment.getMemberId(), memberId)) {
 			throw new CommentPermissionDeniedException("삭제할 권한이 없습니다.");
 		}
-		commentMapper.deleteComment(commentId, memberId);
+
+		int affectedRows = commentMapper.deleteComment(commentId, memberId);
+		if (affectedRows != 1) {
+			throw new CommentNotFoundException("이미 삭제된 댓글입니다.");
+		}
 	}
 }

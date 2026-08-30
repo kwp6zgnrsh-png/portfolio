@@ -1,5 +1,6 @@
 # Local secret config (do not commit)
 config/application-local-secrets.yml
+src/integrationTest/resources/application-test.yml
 .DS_Store
 
 # 프로젝트 제외 경로

@@ -3,6 +3,7 @@ package com.study.backend.board.converter;
 import java.util.Set;
 
 import org.mapstruct.AfterMapping;
+import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -66,8 +67,15 @@ public interface BoardConverter {
 
 	HomeNotice convertToHomeNotice(Board board);
 
+	@Mapping(target = "memberId", ignore = true)
 	Search convertToSearch(SearchRequest searchRequest);
 
+	@BeanMapping(ignoreByDefault = true)
+	@Mapping(target = "title", source = "title")
+	@Mapping(target = "content", source = "content")
+	@Mapping(target = "categoryId", source = "categoryId")
+	@Mapping(target = "isSecret", source = "isSecret")
+	@Mapping(target = "secretPassword", source = "secretPassword")
 	Board convertToBoard(BoardCreateRequest createRequest);
 
 	/** SQL injection 방지: orderBy/direction에 허용된 값만 통과시킨다. */

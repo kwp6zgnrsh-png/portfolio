@@ -7,5 +7,6 @@ public record FreeBoardUpdate(
 	Long id,
 	String title,
 	String content,
-	Long categoryId
+	Long categoryId,
+	Integer version
 ) {}

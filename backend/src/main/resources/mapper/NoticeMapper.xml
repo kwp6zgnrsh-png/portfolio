@@ -101,7 +101,6 @@
             <include refid="noticeSearchConditions">
                 <property name="boardAlias" value="b"/>
             </include>
-            LIMIT #{search.countLimit}
         ) t
     </select>
 

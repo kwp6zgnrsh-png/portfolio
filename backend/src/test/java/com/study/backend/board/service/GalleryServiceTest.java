@@ -16,8 +16,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.study.backend.board.dto.common.request.BoardUpdateRequest;
+import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.exception.BoardNotFoundException;
 import com.study.backend.board.exception.BoardPermissionDeniedException;
 import com.study.backend.board.mapper.GalleryMapper;
@@ -108,34 +110,51 @@ class GalleryServiceTest {
             .isInstanceOf(BoardPermissionDeniedException.class);
     }
 
-    @Test
-    @DisplayName("수정 후 첫 번째 파일이 없으면 FileException을 던진다")
-    void updatePost_noFirstFile_throws() {
+	@Test
+	@DisplayName("수정 후 첫 번째 파일이 없으면 FileException을 던진다")
+	void updatePost_noFirstFile_throws() {
 		BoardUpdateRequest update = boardUpdate();
+
+		MultipartFile mockFile = mock(MultipartFile.class);
+		MultipartFile[] files = {mockFile};
+
+		given(mockFile.isEmpty()).willReturn(false);
 		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
-        given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
-        given(fileService.getFirstFileByBoardId(1L)).willReturn(null);
+		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
+		given(fileService.createFiles(1L, files)).willReturn(List.of());
+		given(fileService.getFirstFileByBoardId(1L)).willReturn(null);
 
-        assertThatThrownBy(() -> galleryService.updatePost(1L, update, 1L, null))
-            .isInstanceOf(FileException.class);
-    }
+		assertThatThrownBy(
+			() -> galleryService.updatePost(1L, update, 1L, files)
+		)
+			.isInstanceOf(FileException.class)
+			.hasMessage("파일 저장에 실패했습니다.");
+	}
 
-    @Test
-    @DisplayName("수정 성공 시 썸네일이 갱신된다")
-    void updatePost_success_thumbnailUpdated() {
-        BoardUpdateRequest update = boardUpdate();
-		FileMetaData file = fileMetaData();
+	@Test
+	@DisplayName("새 파일이 추가되면 썸네일이 갱신된다")
+	void updatePost_success_thumbnailUpdated() {
+		BoardUpdateRequest update = boardUpdate();
+		FileMetaData firstFile = fileMetaData();
+
+		MultipartFile mockFile = mock(MultipartFile.class);
+		MultipartFile[] files = {mockFile};
+
+		given(mockFile.isEmpty()).willReturn(false);
 		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
-        given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
-        given(fileService.getFirstFileByBoardId(1L)).willReturn(file);
+		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
+		given(fileService.createFiles(1L, files)).willReturn(List.of());
+		given(fileService.getFirstFileByBoardId(1L)).willReturn(firstFile);
+		given(galleryMapper.updatePost(1L, update, 1L)).willReturn(1);
 
-        galleryService.updatePost(1L, update, 1L, null);
+		galleryService.updatePost(1L, update, 1L, files);
 
-        then(thumbnailService).should().saveThumbnail(any(), eq(1L));
-        then(galleryMapper).should().updatePost(1L, update, 1L);
-    }
+		then(fileService).should().createFiles(1L, files);
+		then(thumbnailService).should().saveThumbnail(any(), eq(1L));
+		then(galleryMapper).should().updatePost(1L, update, 1L);
+	}
 
 	@Test
 	@DisplayName("새 썸네일 경로가 기존 썸네일 경로와 같으면 물리 삭제 이벤트를 발행하지 않는다")
@@ -145,13 +164,19 @@ class GalleryServiceTest {
 		Path sameThumbnailPath = Path.of("/store/thumbnail/stored.jpeg");
 		ReflectionTestUtils.setField(galleryService, "storePath", "/store/");
 
+		MultipartFile mockFile = mock(MultipartFile.class);
+		MultipartFile[] files = {mockFile};
+
+		given(mockFile.isEmpty()).willReturn(false);
+		given(fileService.createFiles(1L, files)).willReturn(List.of());
 		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
 		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(thumbnailMetaData());
 		given(fileService.getFirstFileByBoardId(1L)).willReturn(file);
 		given(thumbnailService.saveThumbnail(any(), eq(1L))).willReturn(sameThumbnailPath);
+		given(galleryMapper.updatePost(1L, update, 1L)).willReturn(1);
 
-		galleryService.updatePost(1L, update, 1L, null);
+		galleryService.updatePost(1L, update, 1L, files);
 
 		then(eventPublisher).should(never()).publishEvent(any());
 	}
@@ -176,8 +201,9 @@ class GalleryServiceTest {
 		given(fileService.createFiles(1L, files)).willReturn(List.of(createdFile));
 		given(fileService.getFirstFileByBoardId(1L)).willReturn(file);
 		given(thumbnailService.saveThumbnail(any(), eq(1L))).willReturn(createdThumbnail);
-		willThrow(new RuntimeException("update failed"))
-			.given(galleryMapper).updatePost(1L, update, 1L);
+		given(mockFile.isEmpty()).willReturn(false);
+
+		willThrow(new RuntimeException("update failed")).given(galleryMapper).updatePost(1L, update, 1L);
 
 		assertThatThrownBy(() -> galleryService.updatePost(1L, update, 1L, files))
 			.isInstanceOf(RuntimeException.class);
@@ -213,6 +239,7 @@ class GalleryServiceTest {
 		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
         given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
+		given(galleryMapper.deletePost(1L, 1L)).willReturn(1);
 
         galleryService.deletePost(1L, 1L);
 
@@ -221,15 +248,59 @@ class GalleryServiceTest {
         then(thumbnailService).should().deleteThumbnail(1L);
     }
 
+	@Test
+	@DisplayName("오래된 버전으로 수정하면 충돌 예외를 던진다")
+	void updatePost_staleVersion_throwsConflict() {
+		BoardUpdateRequest update = boardUpdate();
+
+		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+		given(galleryMapper.updatePost(1L, update, 1L)).willReturn(0);
+
+		assertThatThrownBy(() -> galleryService.updatePost(1L, update, 1L, null))
+			.isInstanceOf(BoardConflictException.class)
+			.hasMessage("게시글 상태가 변경되어 수정할 수 없습니다.");
+
+		then(fileServiceFactory).shouldHaveNoInteractions();
+		then(thumbnailService).shouldHaveNoInteractions();
+	}
+
+	@Test
+	@DisplayName("파일 변경 없이 수정하면 게시글만 수정하고 썸네일은 유지한다")
+	void updatePost_withoutFileChanges_updatesBoardOnly() {
+		BoardUpdateRequest update = boardUpdate();
+
+		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+
+		given(galleryMapper.updatePost(1L, update, 1L)).willReturn(1);
+
+		galleryService.updatePost(
+			1L,
+			update,
+			1L,
+			null
+		);
+
+		then(galleryMapper).should().updatePost(1L, update, 1L);
+
+		then(fileServiceFactory).shouldHaveNoInteractions();
+
+		then(thumbnailService).shouldHaveNoInteractions();
+	}
+
     // ── helpers ─────────────────────────────────────────────────────────
 
 	private Board board(Long memberId) {
 		return Board.builder().id(1L).memberId(memberId).boardTypeId(BoardType.GALLERIES.id()).build();
 	}
 
-    private BoardUpdateRequest boardUpdate() {
-		return BoardUpdateRequest.builder().categoryId(1L).build();
-    }
+	private BoardUpdateRequest boardUpdate() {
+		return BoardUpdateRequest.builder()
+			.title("제목")
+			.content("내용")
+			.categoryId(1L)
+			.version(0)
+			.build();
+	}
 
     private FileMetaData fileMetaData() {
         return FileMetaData.builder()

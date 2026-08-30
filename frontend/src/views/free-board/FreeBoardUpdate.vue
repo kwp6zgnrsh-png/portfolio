@@ -17,6 +17,7 @@ const writeForm = ref();
 
 const postMeta = reactive({
   id: 0,
+  version: null,
   categories: [],
 });
 
@@ -71,6 +72,7 @@ const getPost = async () => {
 
 const setPostData = (data) => {
   postMeta.id = data.freeBoardUpdate.id;
+  postMeta.version = data.freeBoardUpdate.version;
   formState.categoryId = data.freeBoardUpdate.categoryId;
   formState.title = data.freeBoardUpdate.title;
   formState.content = data.freeBoardUpdate.content;
@@ -94,6 +96,7 @@ const updatePost = async () => {
 
 const createPostFormData = () => {
   const formData = new FormData(writeForm.value);
+  formData.append("version", String(postMeta.version));
   fileState.removeFiles.forEach(item => formData.append("deleteFiles", item));
   return formData;
 }

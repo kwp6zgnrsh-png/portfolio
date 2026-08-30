@@ -26,7 +26,6 @@ public class Search {
 	private String searchWord;
 	private Integer page;
 	private Integer limit;
-	private Integer countLimit;
 	private String orderByField;
 	private String direction;
 	private Boolean onlyMine;

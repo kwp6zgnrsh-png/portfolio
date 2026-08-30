@@ -1,5 +1,6 @@
 package com.study.backend.board.api;
 
+import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -10,14 +11,18 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpMethod;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.study.backend.board.converter.BoardConverter;
+import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.exception.BoardNotFoundException;
 import com.study.backend.board.exception.BoardPermissionDeniedException;
 import com.study.backend.board.model.Board;
@@ -135,17 +140,30 @@ class BoardApiTest {
 	@DisplayName("비로그인 상태에서 내 문의만 조회하면 401을 반환한다")
 	void searchBoardList_onlyMineWithoutLogin_returns401() throws Exception {
 		allowInterceptors();
-		Search search = Search.builder().page(1).limit(10).onlyMine(true).build();
-		given(boardConverter.convertToSearch(any())).willReturn(search);
-		given(boardStrategyFactory.requireReadableStrategy("inquiries")).willReturn(boardStrategy);
-		given(boardStrategy.searchPostList(search))
-			.willThrow(new AuthorizationException("내 문의만 조회하려면 로그인이 필요합니다."));
 
-		mockMvc.perform(get("/api/inquiries").param("onlyMine", "true"))
+		Search search = Search.builder()
+			.page(1)
+			.limit(10)
+			.onlyMine(true)
+			.build();
+
+		given(boardConverter.convertToSearch(any()))
+			.willReturn(search);
+		given(boardStrategyFactory.requireReadableStrategy("inquiries"))
+			.willReturn(boardStrategy);
+
+		// 실제 실행 순서에 맞게 getPostCount에서 예외 발생
+		given(boardStrategy.getPostCount(search))
+			.willThrow(new AuthorizationException(
+				"내 문의만 조회하려면 로그인이 필요합니다."
+			));
+
+		mockMvc.perform(get("/api/inquiries")
+				.param("onlyMine", "true"))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.message").value("내 문의만 조회하려면 로그인이 필요합니다."));
+			.andExpect(jsonPath("$.message")
+				.value("내 문의만 조회하려면 로그인이 필요합니다."));
 	}
-
     // ── boardDetail ─────────────────────────────────────────────────────
 
     @Test
@@ -163,7 +181,7 @@ class BoardApiTest {
     @DisplayName("게시글 상세 조회 성공 시 200을 반환한다")
     void boardDetail_success_returns200() throws Exception {
         allowInterceptors();
-        Board board = Board.builder().id(1L).build();
+        Board board = Board.builder().id(1L).views(0).build();
         given(boardStrategyFactory.requireReadableStrategy("boards")).willReturn(boardStrategy);
         given(boardStrategy.getPostById(1L)).willReturn(board);
         given(boardStrategy.assembleDetailResponse(any(Board.class), any())).willReturn(Map.of());
@@ -191,7 +209,7 @@ class BoardApiTest {
     @DisplayName("비밀글 올바른 비밀번호로 접근 시 200을 반환한다")
     void boardDetailWithPassword_correctPassword_returns200() throws Exception {
         allowInterceptors();
-        Board board = Board.builder().id(1L).memberId(2L).isSecret(true).build();
+        Board board = Board.builder().id(1L).memberId(2L).isSecret(true).views(0).build();
         given(boardStrategyFactory.requireReadableStrategy("inquiries")).willReturn(boardStrategy);
         given(boardStrategy.getPostById(1L)).willReturn(board);
         given(boardStrategy.assembleDetailResponse(any(Board.class), any())).willReturn(Map.of());
@@ -260,6 +278,7 @@ class BoardApiTest {
         mockMvc.perform(multipart(HttpMethod.PUT, "/api/boards/1")
                 .param("title", "수정 제목")
                 .param("content", "수정 내용")
+				.param("version", "0")
                 .cookie(AUTH_COOKIE))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.message").value("수정 완료"));
@@ -280,5 +299,137 @@ class BoardApiTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.message").value("삭제 완료"));
     }
+
+	@Test
+	@DisplayName("마지막 페이지를 초과하면 보정된 페이지로 목록을 조회한다")
+	void searchBoardList_overLastPage_queriesNormalizedPage() throws Exception {
+		allowInterceptors();
+
+		Search search = Search.builder()
+			.page(999)
+			.limit(10)
+			.orderByField("id")
+			.direction("DESC")
+			.build();
+
+		Page normalizedPage = Page.builder()
+			.totalPages(10)
+			.currentPage(10)
+			.startPage(1)
+			.endPage(10)
+			.build();
+
+		given(boardConverter.convertToSearch(any()))
+			.willReturn(search);
+
+		given(boardStrategyFactory.requireReadableStrategy("boards"))
+			.willReturn(boardStrategy);
+
+		given(boardStrategy.getPostCount(search))
+			.willReturn(95);
+
+		given(pagination.pagination(95, 999, 10))
+			.willReturn(normalizedPage);
+
+		given(boardStrategy.searchPostList(any(Search.class)))
+			.willReturn(List.of());
+
+		given(boardStrategy.assembleListResponse(
+			anyList(),
+			eq(normalizedPage)
+		)).willReturn(Map.of());
+
+		mockMvc.perform(get("/api/boards")
+				.param("page", "999")
+				.param("limit", "10"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("성공"));
+
+		ArgumentCaptor<Search> searchCaptor =
+			ArgumentCaptor.forClass(Search.class);
+
+		InOrder order = inOrder(boardStrategy);
+
+		order.verify(boardStrategy)
+			.getPostCount(search);
+
+		order.verify(boardStrategy)
+			.searchPostList(searchCaptor.capture());
+
+		Search actualSearch = searchCaptor.getValue();
+
+		assertThat(actualSearch)
+			.isNotSameAs(search);
+
+		assertThat(actualSearch.getPage())
+			.isEqualTo(10);
+
+		assertThat(search.getPage())
+			.isEqualTo(999);
+
+	}
+
+	@Test
+	@DisplayName("오래된 버전으로 수정하면 409를 반환한다")
+	void updateBoard_staleVersion_returns409() throws Exception {
+		allowInterceptors();
+		givenAuthenticatedMember(1L);
+		given(boardStrategyFactory.requireUpdateStrategy("boards"))
+			.willReturn(updatableBoardStrategy);
+
+		willThrow(new BoardConflictException("게시글 상태가 변경되어 수정할 수 없습니다."))
+			.given(updatableBoardStrategy)
+			.updatePost(eq(1L), any(), eq(1L), isNull());
+
+		mockMvc.perform(multipart(HttpMethod.PUT, "/api/boards/1")
+				.param("title", "수정 제목")
+				.param("content", "수정 내용")
+				.param("version", "3")
+				.cookie(AUTH_COOKIE))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message")
+				.value("게시글 상태가 변경되어 수정할 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("빈 파일 입력은 파일 검증 없이 게시글만 수정한다")
+	void updateBoard_emptyFile_skipsFileValidation() throws Exception {
+		allowInterceptors();
+		givenAuthenticatedMember(1L);
+
+		given(boardStrategyFactory.requireUpdateStrategy("boards"))
+			.willReturn(updatableBoardStrategy);
+
+		MockMultipartFile emptyFile = new MockMultipartFile(
+			"file",
+			"",
+			"application/octet-stream",
+			new byte[0]
+		);
+
+		mockMvc.perform(
+				multipart(HttpMethod.PUT, "/api/boards/1")
+					.file(emptyFile)
+					.param("title", "수정 제목")
+					.param("content", "수정 내용")
+					.param("version", "0")
+					.cookie(AUTH_COOKIE)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("수정 완료"));
+
+		then(fileServiceFactory).shouldHaveNoInteractions();
+
+		then(updatableBoardStrategy).should().updatePost(
+			eq(1L),
+			any(),
+			eq(1L),
+			argThat(files ->
+				files != null
+					&& files.length == 1
+					&& files[0].isEmpty()
+			)
+		);
+	}
 
 }

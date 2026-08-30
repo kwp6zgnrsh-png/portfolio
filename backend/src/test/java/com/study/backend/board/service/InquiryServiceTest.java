@@ -12,9 +12,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import com.study.backend.board.dto.common.request.BoardUpdateRequest;
-import com.study.backend.board.exception.InvalidBoardRequestException;
+import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.exception.BoardNotFoundException;
 import com.study.backend.board.exception.BoardPermissionDeniedException;
+import com.study.backend.board.exception.InvalidBoardRequestException;
 import com.study.backend.board.mapper.InquiryMapper;
 import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
@@ -65,7 +66,7 @@ class InquiryServiceTest {
     @Test
     @DisplayName("게시글이 존재하지 않으면 수정 시 예외를 던진다")
     void updatePost_boardNotFound_throws() {
-        BoardUpdateRequest update = boardUpdate(null);
+        BoardUpdateRequest update = boardUpdate();
         given(inquiryMapper.getPostById(1L)).willReturn(null);
 
         assertThatThrownBy(() -> inquiryService.updatePost(1L, update, 1L))
@@ -75,7 +76,7 @@ class InquiryServiceTest {
     @Test
     @DisplayName("작성자가 아니면 수정 시 예외를 던진다")
     void updatePost_notOwner_throws() {
-        BoardUpdateRequest update = boardUpdate(null);
+        BoardUpdateRequest update = boardUpdate();
         given(inquiryMapper.getPostById(1L)).willReturn(board(2L));
 
         assertThatThrownBy(() -> inquiryService.updatePost(1L, update, 1L))
@@ -92,6 +93,7 @@ class InquiryServiceTest {
         given(inquiryMapper.getPostById(1L)).willReturn(board(1L));
         given(inquiryMapper.isReplied(1L)).willReturn(false);
         given(passwordEncoder.encode("5678")).willReturn("encoded");
+        given(inquiryMapper.updatePost(1L, update, 1L)).willReturn(1);
 
         inquiryService.updatePost(1L, update, 1L);
 
@@ -99,17 +101,22 @@ class InquiryServiceTest {
     }
 
     @Test
-	@DisplayName("공개 여부가 누락되면 일반글로 정규화하고 비밀번호를 제거한다")
-	void updatePost_isSecretMissing_normalizesToPublic() {
-		BoardUpdateRequest update = boardUpdate(null);
-		given(inquiryMapper.getPostById(1L)).willReturn(board(1L));
-		given(inquiryMapper.isReplied(1L)).willReturn(false);
+    @DisplayName("공개 여부가 누락되면 예외를 던진다")
+    void updatePost_isSecretMissing_throws() {
+        BoardUpdateRequest update = BoardUpdateRequest.builder()
+            .title("제목")
+            .content("내용")
+            .version(0)
+            .build();
 
-		inquiryService.updatePost(1L, update, 1L);
+        assertThatThrownBy(() ->
+            inquiryService.updatePost(1L, update, 1L)
+        )
+            .isInstanceOf(InvalidBoardRequestException.class)
+            .hasMessage("공개 여부가 필요합니다.");
 
-		assertThat(update.getIsSecret()).isFalse();
-		assertThat(update.getSecretPassword()).isNull();
-	}
+        then(inquiryMapper).shouldHaveNoInteractions();
+    }
 
     @Test
     @DisplayName("기존 비밀글 수정 시 새 비밀번호가 없으면 기존 비밀번호 해시를 유지한다")
@@ -120,6 +127,7 @@ class InquiryServiceTest {
             .build();
         given(inquiryMapper.getPostById(1L)).willReturn(secretBoard(1L, "stored-hash"));
         given(inquiryMapper.isReplied(1L)).willReturn(false);
+        given(inquiryMapper.updatePost(1L, update, 1L)).willReturn(1);
 
         inquiryService.updatePost(1L, update, 1L);
 
@@ -147,7 +155,7 @@ class InquiryServiceTest {
         given(inquiryMapper.getPostById(1L)).willReturn(board(1L));
         given(inquiryMapper.isReplied(1L)).willReturn(true);
 
-        assertThatThrownBy(() -> inquiryService.updatePost(1L, boardUpdate(null), 1L))
+        assertThatThrownBy(() -> inquiryService.updatePost(1L, boardUpdate(), 1L))
             .isInstanceOf(BoardPermissionDeniedException.class)
             .hasMessageContaining("답변이 완료된 문의는 수정할 수 없습니다.");
     }
@@ -155,10 +163,30 @@ class InquiryServiceTest {
     @Test
     @DisplayName("답변이 없는 문의글이면 수정이 정상 처리된다")
     void updatePost_notReplied_success() {
+        BoardUpdateRequest update = boardUpdate();
+
         given(inquiryMapper.getPostById(1L)).willReturn(board(1L));
         given(inquiryMapper.isReplied(1L)).willReturn(false);
+        given(inquiryMapper.updatePost(1L, update, 1L)).willReturn(1);
 
-        assertThatNoException().isThrownBy(() -> inquiryService.updatePost(1L, boardUpdate(null), 1L));
+        assertThatNoException().isThrownBy(
+            () -> inquiryService.updatePost(1L, update, 1L)
+        );
+    }
+
+    @Test
+    @DisplayName("오래된 버전으로 수정하면 충돌 예외를 던진다")
+    void updatePost_staleVersion_throwsConflict() {
+        BoardUpdateRequest update = boardUpdate();
+
+        given(inquiryMapper.getPostById(1L))
+            .willReturn(board(1L));
+        given(inquiryMapper.updatePost(1L, update, 1L))
+            .willReturn(0);
+
+        assertThatThrownBy(() -> inquiryService.updatePost(1L, update, 1L))
+            .isInstanceOf(BoardConflictException.class)
+            .hasMessage("게시글 상태가 변경되어 수정할 수 없습니다.");
     }
 
     // ── matchesSecretPassword ───────────────────────────────────────────
@@ -204,7 +232,7 @@ class InquiryServiceTest {
     @DisplayName("작성자 본인이면 삭제가 정상 처리된다")
     void deletePost_owner_success() {
         given(inquiryMapper.getPostById(1L)).willReturn(board(1L));
-
+        given(inquiryMapper.deletePost(1L, 1L)).willReturn(1);
         assertThatNoException().isThrownBy(() -> inquiryService.deletePost(1L, 1L));
         then(inquiryMapper).should().deletePost(1L, 1L);
     }
@@ -225,7 +253,13 @@ class InquiryServiceTest {
             .build();
     }
 
-    private BoardUpdateRequest boardUpdate(String secretPassword) {
-        return BoardUpdateRequest.builder().secretPassword(secretPassword).build();
+    private BoardUpdateRequest boardUpdate() {
+        return BoardUpdateRequest.builder()
+            .title("제목")
+            .content("내용")
+            .categoryId(1L)
+            .isSecret(false)
+            .version(0)
+            .build();
     }
 }

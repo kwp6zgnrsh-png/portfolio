@@ -130,7 +130,6 @@ class NoticeMapperTest extends IntegrationTestBase {
             .startDate(LocalDate.of(2020, 1, 1))
             .endDate(LocalDate.of(2030, 12, 31))
             .limit(10)
-            .countLimit(1000)
             .page(1)
             .orderByField("createdDate")
             .direction("DESC")

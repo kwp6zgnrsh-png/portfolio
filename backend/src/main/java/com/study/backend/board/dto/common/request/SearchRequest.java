@@ -20,17 +20,24 @@ import jakarta.validation.constraints.Size;
  * - direction: 정렬(방향) 조건
  */
 public record SearchRequest(
+
 	@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
 	LocalDate startDate,
+
 	@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
 	LocalDate endDate,
+
 	Long categoryId,
+
 	@Size(max = 100)
 	String searchWord,
+
 	@Min(1)
 	Integer page,
+
 	@Min(10) @Max(50)
 	Integer limit,
+
 	String orderByField,
 	String direction,
 	Boolean onlyMine

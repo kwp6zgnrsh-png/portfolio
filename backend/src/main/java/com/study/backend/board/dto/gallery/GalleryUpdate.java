@@ -7,5 +7,6 @@ public record GalleryUpdate(
 	Long id,
 	String title,
 	String content,
-	Long categoryId
+	Long categoryId,
+	Integer version
 ) {}

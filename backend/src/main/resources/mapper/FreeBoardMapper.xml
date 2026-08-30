@@ -106,7 +106,6 @@
                 <property name="boardAlias" value="b"/>
                 <property name="memberAlias" value="m"/>
             </include>
-            LIMIT #{search.countLimit}
         ) t
     </select>
 
@@ -116,6 +115,7 @@
                b.content,
                b.member_id AS memberId,
                b.board_type_id AS boardTypeId,
+               b.version,
                c.id AS categoryId
         FROM board b
             JOIN category c ON b.category_id = c.id
@@ -156,8 +156,8 @@
 
     <update id="updatePost">
         UPDATE board
-        SET title = #{board.title}, content =#{board.content}, category_id = #{board.categoryId}
-        WHERE id = #{boardId} AND member_id = #{memberId} AND state = false
+        SET title = #{board.title}, content =#{board.content}, category_id = #{board.categoryId}, version = version + 1
+        WHERE id = #{boardId} AND member_id = #{memberId} AND state = false AND version = #{board.version}
     </update>
 
     <update id="updateViews">

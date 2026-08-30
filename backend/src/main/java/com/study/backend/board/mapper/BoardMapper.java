@@ -6,7 +6,7 @@ import com.study.backend.board.model.Board;
 import com.study.backend.board.model.Search;
 
 public interface BoardMapper {
-	List<Board> searchPostList(Search search, Long boardTypeId,Integer offset);
+	List<Board> searchPostList(Search search, Long boardTypeId, long offset);
 
 	Integer getPostCountByCriteria(Search search, Long boardTypeId);
 

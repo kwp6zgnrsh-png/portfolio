@@ -9,12 +9,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.study.backend.board.dto.common.request.BoardUpdateRequest;
+import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.mapper.FreeBoardMapper;
 import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
 import com.study.backend.category.service.CategoryService;
 import com.study.backend.file.service.FileService;
 import com.study.backend.file.service.FileServiceFactory;
+import com.study.backend.file.util.FileChangeUtils;
 import com.study.backend.file.util.FileCleanupHelper;
 
 @Service
@@ -49,6 +51,13 @@ public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
 		validateOwnership(updateBoard, memberId, "수정할 수 있는 권한이 없습니다.");
 		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 
+		boolean hasNewFiles = FileChangeUtils.hasNewFiles(files);
+		boolean hasDeletedFiles = FileChangeUtils.hasDeletedFiles(board.getDeleteFiles());
+		if (!hasNewFiles && !hasDeletedFiles) {
+			updateBoardData(boardId, board, memberId);
+			return;
+		}
+
 		FileService fs = fileService.getFileService(BoardType.BOARDS);
 
 		List<Path> createdFiles = new ArrayList<>();
@@ -59,7 +68,7 @@ public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
 			if (files != null && files.length > 0) {
 				FileCleanupHelper.addFiles(createdFiles, fs.createFiles(boardId, files));
 			}
-			mapper.updatePost(boardId, board, memberId);
+			updateBoardData(boardId, board, memberId);
 		} catch (RuntimeException e) {
 			FileCleanupHelper.cleanupFiles(createdFiles);
 			throw e;
@@ -78,8 +87,21 @@ public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
 	public void deletePost(Long boardId, Long memberId) {
 		Board board = mapper.getPostById(boardId);
 		validateOwnership(board, memberId, "삭제할 수 있는 권한이 없습니다.");
-		mapper.deletePost(boardId, memberId);
+
+		int affectedRows = mapper.deletePost(boardId, memberId);
+		if (affectedRows != 1) {
+			throw new BoardConflictException("이미 삭제되었거나 상태가 변경된 게시글입니다.");
+
+		}
 		fileService.getFileService(BoardType.BOARDS).deleteAllFilesByBoardId(boardId);
+	}
+
+	private void updateBoardData(Long boardId, BoardUpdateRequest board, Long memberId) {
+		int affectedRows = mapper.updatePost(boardId, board, memberId);
+
+		if (affectedRows != 1) {
+			throw new BoardConflictException("게시글 상태가 변경되어 수정할 수 없습니다.");
+		}
 	}
 
 	@Override

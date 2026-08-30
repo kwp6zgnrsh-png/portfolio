@@ -44,4 +44,5 @@ public class Board {
 	private Long categoryId;
 	private Long boardTypeId;
 	private Boolean state;
+	private Integer version;
 }

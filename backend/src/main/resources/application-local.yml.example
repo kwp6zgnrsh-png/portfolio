@@ -2,7 +2,7 @@ spring:
   config:
     import: optional:file:./config/application-local-secrets.yml
   datasource:
-    url: jdbc:mysql://localhost:3308/ebrainsoft_study?serverTimezone=UTC&characterEncoding=utf8
+    url: jdbc:mysql://localhost:3306/board?serverTimezone=UTC&characterEncoding=utf8
     hikari:
       maximum-pool-size: 10
       minimum-idle: 10
@@ -19,7 +19,7 @@ free-board:
   deleted-path: boardDeleted/
 
 store:
-  base-path: /your/local/path/store/
+  base-path: /your/local/path/portfolio/store/
 
 gallery-board:
   thumbnail:

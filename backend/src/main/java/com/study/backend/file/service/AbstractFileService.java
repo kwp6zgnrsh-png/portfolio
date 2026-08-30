@@ -28,6 +28,7 @@ import com.study.backend.file.mapper.FileMapper;
 import com.study.backend.file.model.DownloadFile;
 import com.study.backend.file.model.FileMetaData;
 import com.study.backend.file.util.PathUtils;
+import com.study.backend.file.validation.ImageDimensionValidator;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -120,7 +121,13 @@ public abstract class AbstractFileService implements FileService {
 
 					File uploadFile = new File(uploadPath);
 					multipartFile.transferTo(uploadFile);
+
+					// 검증 실패 시 catch에서 삭제할 수 있도록 먼저 등록
 					writtenPaths.add(uploadFile.toPath());
+
+					if (isImageType(mimeSubtype)) {
+						ImageDimensionValidator.validate(uploadFile.toPath());
+					}
 
 					fileMapper.createFile(fileMetaData);
 				}
@@ -331,9 +338,14 @@ public abstract class AbstractFileService implements FileService {
 				if (!fileTypes.contains(type)) {
 					throw new FileException("파일 형식 오류");
 				}
+
 				validateMagicBytes(file, type);
 			}
 		}
+	}
+
+	private boolean isImageType(String type) {
+		return Set.of("jpeg", "png", "gif").contains(type);
 	}
 
 	/** 비어 있지 않은 파일의 개수를 반환한다. */

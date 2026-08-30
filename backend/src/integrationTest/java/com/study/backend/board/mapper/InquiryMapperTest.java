@@ -109,14 +109,32 @@ class InquiryMapperTest extends IntegrationTestBase {
     @Test
     @DisplayName("게시글 수정 후 단건 조회 시 제목이 변경된다")
     void updatePost_thenGetById_titleChanged() {
-        Board board = Board.builder().title("원래 제목").content("내용").isSecret(false).build();
+        Board board = Board.builder()
+            .title("원래 제목")
+            .content("내용")
+            .categoryId(1L)
+            .isSecret(false)
+            .build();
+
         inquiryMapper.createPost(board, 4L, testMemberId);
 
-        BoardUpdateRequest update = BoardUpdateRequest.builder()
-            .title("수정된 제목").content("수정된 내용").isSecret(false).build();
-        inquiryMapper.updatePost(board.getId(), update, testMemberId);
+        int currentVersion = inquiryMapper.getPostForUpdate(board.getId()).getVersion();
 
-        assertThat(inquiryMapper.getPostById(board.getId()).getTitle()).isEqualTo("수정된 제목");
+        BoardUpdateRequest update = BoardUpdateRequest.builder()
+            .title("수정된 제목")
+            .content("수정된 내용")
+            .categoryId(1L)
+            .isSecret(false)
+            .version(currentVersion)
+            .build();
+
+        int affectedRows = inquiryMapper.updatePost(board.getId(), update, testMemberId);
+
+        Board found = inquiryMapper.getPostForUpdate(board.getId());
+
+        assertThat(affectedRows).isEqualTo(1);
+        assertThat(found.getTitle()).isEqualTo("수정된 제목");
+        assertThat(found.getVersion()).isEqualTo(currentVersion + 1);
     }
 
     @Test
@@ -158,7 +176,6 @@ class InquiryMapperTest extends IntegrationTestBase {
             .startDate(LocalDate.of(2020, 1, 1))
             .endDate(LocalDate.of(2030, 12, 31))
             .limit(10)
-            .countLimit(1000)
             .page(1)
             .orderByField("createdDate")
             .direction("DESC")

@@ -7,5 +7,6 @@ public record InquiryUpdate(
 	Long id,
 	String title,
 	String content,
-	Boolean isSecret
+	Boolean isSecret,
+	Integer version
 ) {}

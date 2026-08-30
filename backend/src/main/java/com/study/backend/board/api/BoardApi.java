@@ -33,6 +33,7 @@ import com.study.backend.common.annotation.Public;
 import com.study.backend.common.dto.ApiResponse;
 import com.study.backend.common.util.Pagination;
 import com.study.backend.file.service.FileServiceFactory;
+import com.study.backend.file.util.FileChangeUtils;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -51,17 +52,21 @@ public class BoardApi {
 	@Public
 	@GetMapping("/{boardType}")
 	public ApiResponse<?> searchBoardList(@PathVariable String boardType,
-									   @Valid @ModelAttribute SearchRequest searchRequest,
-									   @LoginMember(required = false) Long memberId) {
+									      @Valid @ModelAttribute SearchRequest searchRequest,
+									      @LoginMember(required = false) Long memberId) {
 
 		BoardReadableStrategy boardService = boardStrategyFactory.requireReadableStrategy(boardType);
 
 		Search search = boardConverter.convertToSearch(searchRequest);
 		search.setMemberId(memberId);
 
-		List<Board> searchPostList = boardService.searchPostList(search);
 		Integer postCount = boardService.getPostCount(search);
 		Page page = paginationService.pagination(postCount, search.getPage(), search.getLimit());
+		Search normalizedSearch = search.toBuilder()
+			.page(page.getCurrentPage())
+			.build();
+
+		List<Board> searchPostList = boardService.searchPostList(normalizedSearch);
 		Object response = boardService.assembleListResponse(searchPostList, page);
 
 		return ApiResponse.of("성공", response);
@@ -70,9 +75,9 @@ public class BoardApi {
 	/** 게시글을 생성하고, 파일이 있으면 함께 저장한다. */
 	@PostMapping("/{boardType}")
 	public ApiResponse<?> createBoard(@PathVariable String boardType,
-								   @ModelAttribute @Valid BoardCreateRequest createRequest,
-								   @RequestPart(value = "file", required = false) MultipartFile[] files,
-								   @LoginMember Long memberId) {
+								      @ModelAttribute @Valid BoardCreateRequest createRequest,
+								      @RequestPart(value = "file", required = false) MultipartFile[] files,
+								      @LoginMember Long memberId) {
 
 		BoardCreateStrategy boardService = boardStrategyFactory.requireCreateStrategy(boardType);
 		Board board = boardConverter.convertToBoard(createRequest);
@@ -88,15 +93,16 @@ public class BoardApi {
 	@Public
 	@GetMapping("/{boardType}/{id}")
 	public ApiResponse<?> boardDetail(@PathVariable String boardType,
-								   @PathVariable("id") Long boardId,
-								   @LoginMember(required = false) Long memberId,
-								   @CookieValue(value = "secret_token", required = false) String secretToken) {
+								      @PathVariable("id") Long boardId,
+								      @LoginMember(required = false) Long memberId,
+								      @CookieValue(value = "secret_token", required = false) String secretToken) {
 
-			BoardReadableStrategy boardService = boardStrategyFactory.requireReadableStrategy(boardType);
+		BoardReadableStrategy boardService = boardStrategyFactory.requireReadableStrategy(boardType);
 		Board findPost = boardService.getPostById(boardId);
 
 		boardStrategyFactory.validateAccess(boardType, findPost, memberId, secretToken);
 		boardService.updateViews(boardId);
+		findPost.setViews(findPost.getViews() + 1);
 
 		Object response = boardService.assembleDetailResponse(findPost, memberId);
 
@@ -106,8 +112,8 @@ public class BoardApi {
 	/** 수정 폼에 필요한 게시글 정보를 반환한다. 작성자 본인만 접근 가능하다. */
 	@GetMapping("/{boardType}/update/{id}")
 	public ApiResponse<?> getUpdateForm(@PathVariable("id") Long boardId,
-								   @PathVariable String boardType,
-								   @LoginMember Long memberId) {
+								        @PathVariable String boardType,
+								        @LoginMember Long memberId) {
 
 		BoardUpdateStrategy boardService = boardStrategyFactory.requireUpdateStrategy(boardType);
 		Board board = boardService.getPostForUpdate(boardId, memberId);
@@ -119,10 +125,10 @@ public class BoardApi {
 	/** 게시글 내용과 파일을 수정한다. */
 	@PutMapping("/{boardType}/{id}")
 	public ApiResponse<?> updateBoard(@PathVariable String boardType,
-								 @PathVariable("id") Long boardId,
-								 @ModelAttribute @Valid BoardUpdateRequest boardUpdate,
-								 @RequestPart(value = "file", required = false) MultipartFile[] files,
-								 @LoginMember Long memberId) {
+								      @PathVariable("id") Long boardId,
+								      @ModelAttribute @Valid BoardUpdateRequest boardUpdate,
+								      @RequestPart(value = "file", required = false) MultipartFile[] files,
+								      @LoginMember Long memberId) {
 
 		BoardUpdateStrategy boardService = boardStrategyFactory.requireUpdateStrategy(boardType);
 
@@ -136,8 +142,8 @@ public class BoardApi {
 	/** 게시글을 삭제한다. */
 	@DeleteMapping("/{boardType}/{id}")
 	public ApiResponse<?> removeBoard(@PathVariable String boardType,
-								 @PathVariable("id") Long boardId,
-								 @LoginMember Long memberId) {
+								      @PathVariable("id") Long boardId,
+								      @LoginMember Long memberId) {
 
 		BoardDeleteStrategy boardService = boardStrategyFactory.requireDeleteStrategy(boardType);
 		boardService.deletePost(boardId, memberId);
@@ -153,11 +159,14 @@ public class BoardApi {
 		validateFilesIfPresent(boardType, files);
 	}
 
-	/** 첨부 파일이 있을 때만 게시판 타입별 파일 정책으로 유효성을 검증한다. */
+	/** 비어 있지 않은 첨부 파일이 있을 때만 파일 정책을 검증한다. */
 	private void validateFilesIfPresent(String boardType, MultipartFile[] files) {
-		if (files == null || files.length == 0) {
+		if (!FileChangeUtils.hasNewFiles(files)) {
 			return;
 		}
-		fileServiceFactory.getFileService(boardType).validateFiles(files);
+
+		fileServiceFactory
+			.getFileService(boardType)
+			.validateFiles(files);
 	}
 }

@@ -15,6 +15,7 @@ import com.study.backend.board.model.Search;
 import com.study.backend.board.service.GalleryService;
 import com.study.backend.file.exception.FileException;
 import com.study.backend.file.exception.RequiredFileException;
+import com.study.backend.file.util.FileChangeUtils;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,10 +43,9 @@ public class GalleryStrategy implements BoardReadableStrategy, BoardCreateStrate
 
 	@Override
 	public BoardCreateResult createPost(Board board, Long boardTypeId, Long memberId, MultipartFile[] files) {
-		if (files == null || files.length == 0) {
+		if (!FileChangeUtils.hasNewFiles(files)) {
 			throw new RequiredFileException("갤러리 게시글에는 이미지가 필요합니다.");
 		}
-
 		try {
 			boardService.createPostWithFilesAndThumbnail(board, boardTypeId, memberId, files);
 		} catch (FileException e) {

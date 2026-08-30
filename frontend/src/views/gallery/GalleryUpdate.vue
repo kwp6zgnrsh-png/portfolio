@@ -16,6 +16,7 @@ const writeForm = ref();
 
 const postMeta = reactive({
   id: 0,
+  version: null,
   categories: [],
 });
 
@@ -83,6 +84,7 @@ const getPost = async () => {
 
 const setPostData = (data) => {
   postMeta.id = data.id;
+  postMeta.version = data.version;
   formState.categoryId = data.categoryId;
   formState.title = data.title;
   formState.content = data.content;
@@ -93,6 +95,7 @@ const updatePost = async () => {
   if(formValid){
     try {
       const formData = new FormData(writeForm.value);
+      formData.append("version", String(postMeta.version));
       fileState.removeFiles.forEach(item => formData.append("deleteFiles", item));
 
       await postService.updatePost("galleries", route.params.id, formData);

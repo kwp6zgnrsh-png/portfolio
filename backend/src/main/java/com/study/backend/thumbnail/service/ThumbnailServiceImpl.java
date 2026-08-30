@@ -13,6 +13,7 @@ import net.coobird.thumbnailator.Thumbnails;
 
 import com.study.backend.file.exception.FileException;
 import com.study.backend.file.util.PathUtils;
+import com.study.backend.file.validation.ImageDimensionValidator;
 import com.study.backend.thumbnail.dto.SourceImage;
 import com.study.backend.thumbnail.mapper.ThumbnailMapper;
 import com.study.backend.thumbnail.model.ThumbnailMetaData;
@@ -81,6 +82,8 @@ public class ThumbnailServiceImpl implements ThumbnailService {
 				thumbnailInfo.storeName(),
 				thumbnailInfo.extension()
 			));
+
+			ImageDimensionValidator.validate(originFile.toPath());
 
 			Thumbnails.of(originFile)
 				.size(360,360)

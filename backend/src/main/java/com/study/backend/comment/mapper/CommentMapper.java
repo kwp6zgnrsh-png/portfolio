@@ -11,7 +11,7 @@ import com.study.backend.comment.model.Comment;
 public interface CommentMapper {
 	List<Comment> getCommentsByBoardId(Long boardId);
 	void createComment(Comment comment);
-	void deleteComment(Long commentId, Long memberId);
+	int deleteComment(Long commentId, Long memberId);
 	Comment	getCommentById(Long commentId);
 	Board getBoardForComment(Long boardId);
 }

@@ -100,14 +100,32 @@ class GalleryMapperTest extends IntegrationTestBase {
     @Test
     @DisplayName("게시글 수정 후 단건 조회 시 제목이 변경된다")
     void updatePost_thenGetById_titleChanged() {
-        Board board = Board.builder().title("원래 제목").content("내용").categoryId(1L).build();
+        Board board = Board.builder()
+            .title("원래 제목")
+            .content("내용")
+            .categoryId(1L)
+            .build();
+
         galleryMapper.createPost(board, 3L, testMemberId);
 
-        BoardUpdateRequest update = BoardUpdateRequest.builder()
-            .title("수정된 제목").content("수정된 내용").categoryId(1L).build();
-        galleryMapper.updatePost(board.getId(), update, testMemberId);
+        int currentVersion =
+            galleryMapper.getPostForUpdate(board.getId()).getVersion();
 
-        assertThat(galleryMapper.getPostById(board.getId()).getTitle()).isEqualTo("수정된 제목");
+        BoardUpdateRequest update = BoardUpdateRequest.builder()
+            .title("수정된 제목")
+            .content("수정된 내용")
+            .categoryId(1L)
+            .version(currentVersion)
+            .build();
+
+        int affectedRows =
+            galleryMapper.updatePost(board.getId(), update, testMemberId);
+
+        Board found = galleryMapper.getPostForUpdate(board.getId());
+
+        assertThat(affectedRows).isEqualTo(1);
+        assertThat(found.getTitle()).isEqualTo("수정된 제목");
+        assertThat(found.getVersion()).isEqualTo(currentVersion + 1);
     }
 
     @Test
@@ -133,12 +151,50 @@ class GalleryMapperTest extends IntegrationTestBase {
         assertThat(galleryMapper.getPostById(board.getId()).getViews()).isEqualTo(before + 1);
     }
 
+    @Test
+    @DisplayName("오래된 버전으로 수정하면 기존 수정 내용을 덮어쓰지 않는다")
+    void updatePost_staleVersion_doesNotOverwrite() {
+        Board board = Board.builder()
+            .title("원래 제목")
+            .content("원래 내용")
+            .categoryId(1L)
+            .build();
+
+        galleryMapper.createPost(board, 3L, testMemberId);
+
+        int originalVersion = galleryMapper.getPostForUpdate(board.getId()).getVersion();
+
+        BoardUpdateRequest firstUpdate = BoardUpdateRequest.builder()
+            .title("첫 번째 수정")
+            .content("첫 번째 내용")
+            .categoryId(1L)
+            .version(originalVersion)
+            .build();
+
+        BoardUpdateRequest staleUpdate = BoardUpdateRequest.builder()
+            .title("오래된 요청의 수정")
+            .content("오래된 요청의 내용")
+            .categoryId(1L)
+            .version(originalVersion)
+            .build();
+
+        int firstAffectedRows = galleryMapper.updatePost(board.getId(), firstUpdate, testMemberId);
+
+        int staleAffectedRows = galleryMapper.updatePost(board.getId(), staleUpdate, testMemberId);
+
+        Board found = galleryMapper.getPostForUpdate(board.getId());
+
+        assertThat(firstAffectedRows).isEqualTo(1);
+        assertThat(staleAffectedRows).isZero();
+        assertThat(found.getTitle()).isEqualTo("첫 번째 수정");
+        assertThat(found.getVersion()).isEqualTo(originalVersion + 1);
+    }
+
     private Search baseSearch() {
         return Search.builder()
             .startDate(LocalDate.of(2020, 1, 1))
             .endDate(LocalDate.of(2030, 12, 31))
             .limit(10)
-            .countLimit(1000)
             .page(1)
             .orderByField("createdDate")
             .direction("DESC")
