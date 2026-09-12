@@ -20,8 +20,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.NonNull;
 
 /**
- * 로그인 엔드포인트 브루트포스 방지용 슬라이딩 윈도우 Rate Limiter.
- * IP당 1분에 최대 10회 시도를 허용하며, 초과 시 429를 반환한다.
+ * 로그인, 회원가입, 비밀글 비밀번호 검증 요청에
+ * IP 기반 슬라이딩 윈도우 Rate Limit을 적용한다.
  */
 @Component
 public class LoginRateLimitInterceptor implements HandlerInterceptor {
@@ -31,6 +31,9 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 	/** 1분 내 허용 최대 로그인 시도 횟수 */
 	private static final int LOGIN_MAX_ATTEMPTS = 10;
 
+	/** 1분 내 허용 최대 회원가입 시도 횟수 */
+	private static final int SIGN_UP_MAX_ATTEMPTS = 3;
+
 	/** 1분 내 허용 최대 비밀글 비밀번호 검증 횟수 */
 	private static final int SECRET_VERIFY_MAX_ATTEMPTS = 5;
 
@@ -38,10 +41,14 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 	private static final long WINDOW_MS = 60_000L;
 
 	private static final String LOGIN_PATH = "/api/login";
+	private static final String SIGN_UP_PATH = "/api/sign-up";
 	private static final String SECRET_VERIFY_SUFFIX = "/verifySecretPostPassword";
 
 	/** 로그인: IP별 요청 타임스탬프 */
 	private final Map<String, long[]> loginAttempts = new ConcurrentHashMap<>();
+
+	/** 회원가입: IP별 요청 타임스탬프 */
+	private final Map<String, long[]> signUpAttempts = new ConcurrentHashMap<>();
 
 	/** 비밀글 비밀번호 검증: IP + boardId별 요청 타임스탬프 */
 	private final Map<String, long[]> secretVerifyAttempts = new ConcurrentHashMap<>();
@@ -66,13 +73,14 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 		);
 	}
 
-	 /** 로그인 및 비밀글 검증 요청에 대해 슬라이딩 윈도우 기반 Rate Limit을 적용한다.*/
+	 /** 로그인, 회원가입, 비밀글 검증 요청에 대해 슬라이딩 윈도우 기반 Rate Limit을 적용한다.*/
 	@Override
 	public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
 							 @NonNull Object handler) throws Exception {
 		String ip = resolveClientIp(request);
 		long now = Instant.now().toEpochMilli();
 
+		// 로그인 검사
 		if(isLoginPath(request)) {
 			boolean allowed = tryRecordAttempt(loginAttempts, ip, now, LOGIN_MAX_ATTEMPTS);
 			if(!allowed) {
@@ -82,6 +90,24 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 			return true;
 		}
 
+		// 회원가입 검사
+		if (isSignUpPath(request)) {
+			boolean allowed = tryRecordAttempt(
+				signUpAttempts,
+				ip,
+				now,
+				SIGN_UP_MAX_ATTEMPTS
+			);
+
+			if (!allowed) {
+				writeTooManyRequests(response);
+				return false;
+			}
+
+			return true;
+		}
+
+		// 비밀글 검사
 		if (isSecretVerifyPath(request)) {
 			String boardId = extractBoardIdFromSecretVerifyPath(request);
 
@@ -117,6 +143,11 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 		return LOGIN_PATH.equals(request.getRequestURI());
 	}
 
+	/** 요청 URI가 회원가입 경로인지 확인한다. */
+	private boolean isSignUpPath(HttpServletRequest request) {
+		return SIGN_UP_PATH.equals(request.getRequestURI());
+	}
+
 	/** 요청 URI가 비밀글 비밀번호 검증 경로인지 확인한다. */
 	private boolean isSecretVerifyPath(HttpServletRequest request) {
 		String uri = request.getRequestURI();
@@ -126,15 +157,29 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 	/** 비밀글 검증 URI에서 boardId 세그먼트를 추출한다. */
 	private String extractBoardIdFromSecretVerifyPath(HttpServletRequest request) {
 		String uri = request.getRequestURI();
-		if (uri == null) {
-			return null;
-		}
 		String[] segments = uri.split("/");
-		// .../{boardType}/{boardId}/verifySecretPostPassword
+
 		if (segments.length < 2) {
 			return null;
 		}
-		return segments[segments.length - 2];
+
+		String rawBoardId = segments[segments.length - 2];
+		return normalizeBoardId(rawBoardId);
+	}
+
+	/** 게시글 ID를 숫자 기준으로 정규화하여 선행 0을 이용한 요청 제한 우회를 방지한다. */
+	private String normalizeBoardId(String rawBoardId) {
+		try {
+			long boardId = Long.parseLong(rawBoardId);
+
+			if (boardId <= 0) {
+				return null;
+			}
+
+			return Long.toString(boardId);
+		} catch (NumberFormatException e) {
+			return null;
+		}
 	}
 
 	/** IP와 boardId를 조합하여 Rate Limit 키를 생성한다. */

@@ -180,4 +180,53 @@ class LoginRateLimitInterceptorTest {
 
         assertThat(blockedResponse.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
     }
+
+    @Test
+    @DisplayName("같은 게시글 ID의 선행 0 표기는 동일한 제한 키를 사용한다")
+    void equivalentBoardIdsShareAttempts() throws Exception {
+        String[] paths = {
+            "/api/inquiries/1/verifySecretPostPassword",
+            "/api/inquiries/01/verifySecretPostPassword",
+            "/api/inquiries/001/verifySecretPostPassword",
+            "/api/inquiries/0001/verifySecretPostPassword",
+            "/api/inquiries/1/verifySecretPostPassword"
+        };
+
+        for (String path : paths) {
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+            request.setRemoteAddr("127.0.0.1");
+
+            assertThat(interceptor.preHandle(request, response, new Object())).isTrue();
+        }
+
+        MockHttpServletRequest blockedRequest = new MockHttpServletRequest(
+                "POST",
+                "/api/inquiries/01/verifySecretPostPassword"
+        );
+        blockedRequest.setRemoteAddr("127.0.0.1");
+
+        assertThat(interceptor.preHandle(blockedRequest, response, new Object())).isFalse();
+
+        assertThat(response.getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    @DisplayName("회원가입 요청은 IP당 5회 이후 429를 반환한다")
+    void preHandle_signUpOverLimit_returns429() throws Exception {
+        MockHttpServletRequest signUpRequest =
+            new MockHttpServletRequest("POST", "/api/sign-up");
+        signUpRequest.setRemoteAddr("127.0.0.1");
+
+        for (int i = 0; i < 3; i++) {
+            MockHttpServletResponse allowedResponse = new MockHttpServletResponse();
+            assertThat(interceptor.preHandle(signUpRequest, allowedResponse, new Object())
+            ).isTrue();
+        }
+
+        MockHttpServletResponse blockedResponse = new MockHttpServletResponse();
+
+        assertThat(interceptor.preHandle(signUpRequest, blockedResponse, new Object())).isFalse();
+
+        assertThat(blockedResponse.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+    }
 }

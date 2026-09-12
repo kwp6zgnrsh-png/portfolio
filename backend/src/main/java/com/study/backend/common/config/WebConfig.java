@@ -63,7 +63,7 @@ public class WebConfig implements WebMvcConfigurer {
 	@Override
 	public void addInterceptors(InterceptorRegistry registry) {
 		registry.addInterceptor(loginRateLimitInterceptor)
-			.addPathPatterns("/api/login", "/api/*/*/verifySecretPostPassword");
+			.addPathPatterns("/api/login", "/api/sign-up", "/api/*/*/verifySecretPostPassword");
 		registry.addInterceptor(jwtAuthInterceptor)
 			.addPathPatterns("/**")
 			.excludePathPatterns("/swagger-ui/**", "/v3/api-docs/**");

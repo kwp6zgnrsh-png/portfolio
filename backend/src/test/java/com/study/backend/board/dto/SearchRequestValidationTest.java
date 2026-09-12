@@ -3,6 +3,7 @@ package com.study.backend.board.dto;
 import static org.assertj.core.api.Assertions.*;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -28,11 +29,64 @@ class SearchRequestValidationTest {
 	}
 
 	@Test
-	@DisplayName("시작일과 종료일을 모두 생략하면 검증을 통과한다")
-	void noDateRange_passes() {
-		Set<ConstraintViolation<SearchRequest>> violations = validator.validate(request(null, null));
+	@DisplayName("날짜를 모두 생략하면 서울 기준 오늘과 365일 전으로 설정된다")
+	void noDateRange_defaultsToRecent365Days() {
+		ZoneId zone = ZoneId.of("Asia/Seoul");
+		LocalDate before = LocalDate.now(zone);
 
-		assertThat(violations).noneMatch(violation -> isDateRangeMessage(violation.getMessage()));
+		SearchRequest search = request(null, null);
+
+		LocalDate after = LocalDate.now(zone);
+
+		// 테스트 도중 자정이 지나도 정상적으로 검증
+		assertThat(search.endDate()).isBetween(before, after);
+		assertThat(search.startDate())
+			.isEqualTo(search.endDate().minusDays(365));
+
+		assertThat(validator.validate(search)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("날짜 차이가 정확히 365일이면 통과하고 입력 날짜를 유지한다")
+	void dateRange365Days_passes() {
+		LocalDate start = LocalDate.of(2025, 1, 1);
+		LocalDate end = start.plusDays(365);
+
+		SearchRequest search = request(start, end);
+
+		assertThat(search.startDate()).isEqualTo(start);
+		assertThat(search.endDate()).isEqualTo(end);
+		assertThat(validator.validate(search)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("날짜 차이가 366일이면 검증에 실패한다")
+	void dateRange366Days_fails() {
+		LocalDate start = LocalDate.of(2025, 1, 1);
+		SearchRequest search = request(start, start.plusDays(366));
+
+		assertThat(validator.validate(search))
+			.anySatisfy(violation -> {
+				assertThat(violation.getPropertyPath().toString())
+					.isEqualTo("dateRangeWithinLimit");
+				assertThat(violation.getMessage())
+					.isEqualTo("최대 검색 범위는 365일입니다.");
+			});
+	}
+
+	@Test
+	@DisplayName("윤년을 포함해 366일인 기간은 달력상 1년이어도 실패한다")
+	void dateRangeAcrossLeapYear_fails() {
+		SearchRequest search = request(
+			LocalDate.of(2024, 1, 1),
+			LocalDate.of(2025, 1, 1)
+		);
+
+		assertThat(validator.validate(search))
+			.anyMatch(violation ->
+				violation.getPropertyPath().toString()
+					.equals("dateRangeWithinLimit")
+			);
 	}
 
 	@Test
@@ -71,15 +125,11 @@ class SearchRequestValidationTest {
 		Set<ConstraintViolation<SearchRequest>> violations = validator.validate(
 			request(LocalDate.of(2026, 7, 15), LocalDate.of(2026, 7, 15))
 		);
-
-		assertThat(violations).noneMatch(violation -> isDateRangeMessage(violation.getMessage()));
+		assertThat(violations).isEmpty();
 	}
 
 	private SearchRequest request(LocalDate startDate, LocalDate endDate) {
 		return new SearchRequest(startDate, endDate, null, null, null, null, null, null, null);
 	}
 
-	private boolean isDateRangeMessage(String message) {
-		return COMPLETE_MESSAGE.equals(message) || ORDER_MESSAGE.equals(message);
-	}
 }

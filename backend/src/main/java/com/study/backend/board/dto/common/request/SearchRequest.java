@@ -1,6 +1,8 @@
 package com.study.backend.board.dto.common.request;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 
 import org.springframework.format.annotation.DateTimeFormat;
 
@@ -50,6 +52,10 @@ public record SearchRequest(
 		if (limit == null) {
 			limit = 10;
 		}
+		if (startDate == null && endDate == null) {
+			endDate = LocalDate.now(ZoneId.of("Asia/Seoul"));
+			startDate = endDate.minusDays(365);
+		}
 	}
 
 	@AssertTrue(message = "시작일과 종료일을 함께 입력해 주세요.")
@@ -60,5 +66,13 @@ public record SearchRequest(
 	@AssertTrue(message = "시작일은 종료일보다 늦을 수 없습니다.")
 	public boolean isDateRangeOrdered() {
 		return startDate == null || endDate == null || !startDate.isAfter(endDate);
+	}
+
+	@AssertTrue(message = "최대 검색 범위는 365일입니다.")
+	public boolean isDateRangeWithinLimit() {
+		if (startDate == null || endDate == null) {
+			return true; // 날짜 누락은 기존 검증에서 처리
+		}
+		return ChronoUnit.DAYS.between(startDate, endDate) <= 365;
 	}
 }
