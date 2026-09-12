@@ -1,13 +1,13 @@
 package com.study.backend.member.mapper;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 import java.sql.PreparedStatement;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,11 +21,11 @@ class MemberMapperTest extends IntegrationTestBase {
 
 	@Test
 	@DisplayName("member_id는 unique 제약으로 중복 저장할 수 없다")
-	void createMember_duplicateMemberId_throwsDataIntegrityViolationException() {
+	void createMember_duplicateMemberId_throwsDuplicateKeyException() {
 		insertMember("duplicate-id", "encoded-password", "홍길동");
 
 		assertThatThrownBy(() -> insertMember("duplicate-id", "encoded-password-2", "임꺽정"))
-			.isInstanceOf(DataIntegrityViolationException.class);
+			.isInstanceOf(DuplicateKeyException.class);
 	}
 
 	private void insertMember(String memberId, String password, String memberName) {

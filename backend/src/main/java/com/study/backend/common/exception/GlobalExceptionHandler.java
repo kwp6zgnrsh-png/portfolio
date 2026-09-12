@@ -5,12 +5,15 @@ import java.util.stream.Collectors;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import com.study.backend.board.exception.BoardConflictException;
@@ -26,6 +29,7 @@ import com.study.backend.file.exception.FileException;
 import com.study.backend.file.exception.FileNotFoundException;
 import com.study.backend.file.exception.RequiredFileException;
 import com.study.backend.member.exception.DuplicateMemberIdException;
+import com.study.backend.member.exception.LoginFailedException;
 import com.study.backend.member.exception.MemberException;
 
 import lombok.extern.slf4j.Slf4j;
@@ -115,15 +119,21 @@ public class GlobalExceptionHandler {
 		return ApiResponse.of(e.getMessage());
 	}
 
-	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	@ResponseStatus(HttpStatus.CONFLICT)
 	@ExceptionHandler(DuplicateMemberIdException.class)
 	public ApiResponse<Void> duplicateMemberIdException(DuplicateMemberIdException e) {
 		return ApiResponse.of(e.getMessage());
 	}
 
-	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	@ResponseStatus(HttpStatus.UNAUTHORIZED)
+	@ExceptionHandler(LoginFailedException.class)
+	public ApiResponse<Void> loginFailedException(LoginFailedException e) {
+		return ApiResponse.of(e.getMessage());
+	}
+
+	@ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
 	@ExceptionHandler(MaxUploadSizeExceededException.class)
-	public ApiResponse<Void> maxUploadSizeExceededException(MaxUploadSizeExceededException e){
+	public ApiResponse<Void> maxUploadSizeExceededException(MaxUploadSizeExceededException e) {
 		return ApiResponse.of("파일 용량 초과");
 	}
 
@@ -150,5 +160,23 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(BoardConflictException.class)
 	public ApiResponse<Void> BoardConflictException(BoardConflictException e){
 		return ApiResponse.of(e.getMessage());
+	}
+
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ApiResponse<Void> httpMessageNotReadableException(HttpMessageNotReadableException e) {
+		return ApiResponse.of("요청 형식이 올바르지 않습니다.");
+	}
+
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ApiResponse<Void> methodArgumentTypeMismatchException(MethodArgumentTypeMismatchException e) {
+		return ApiResponse.of("요청 형식이 올바르지 않습니다.");
+	}
+
+	@ResponseStatus(HttpStatus.BAD_REQUEST)
+	@ExceptionHandler(MissingServletRequestParameterException.class)
+	public ApiResponse<Void> missingServletRequestParameterException(MissingServletRequestParameterException e) {
+		return ApiResponse.of("요청 형식이 올바르지 않습니다.");
 	}
 }

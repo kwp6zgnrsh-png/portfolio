@@ -1,12 +1,13 @@
 package com.study.backend.member.service;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import com.study.backend.common.util.JwtTokenProvider;
 import com.study.backend.member.dto.response.LoginResult;
 import com.study.backend.member.exception.DuplicateMemberIdException;
+import com.study.backend.member.exception.LoginFailedException;
 import com.study.backend.member.exception.MemberException;
 import com.study.backend.member.mapper.MemberMapper;
 import com.study.backend.member.model.Member;
@@ -27,7 +28,7 @@ public class MemberServiceImpl implements MemberService {
 		Member findMember = memberMapper.getMemberById(member.getMemberId());
 
 		if (findMember == null || !passwordEncoder.matches(member.getMemberPassword(), findMember.getMemberPassword())) {
-			throw new MemberException("아이디 혹은 비밀번호가 일치하지 않습니다.");
+			throw new LoginFailedException("아이디 혹은 비밀번호가 일치하지 않습니다.");
 		}
 
 		String token = jwtTokenProvider.createToken(findMember);
@@ -43,7 +44,7 @@ public class MemberServiceImpl implements MemberService {
 		Member copyMember = member.copyWithPassword(passwordEncoder.encode(member.getMemberPassword()));
 		try {
 			memberMapper.createMember(copyMember);
-		} catch (DataIntegrityViolationException e) {
+		} catch (DuplicateKeyException e) {
 			throw new DuplicateMemberIdException("이미 사용 중인 아이디입니다.", e);
 		}
 	}
@@ -59,7 +60,9 @@ public class MemberServiceImpl implements MemberService {
 	@Override
 	public void validateIdNotTaken(String memberId) {
 		Member member = memberMapper.getMemberById(memberId);
-		if(member != null) throw new MemberException("사용중인 아이디");
+		if (member != null) {
+			throw new DuplicateMemberIdException("이미 사용 중인 아이디입니다.");
+		}
 	}
 
 	/** 사용이 금지된 아이디이면 예외를 던진다. */

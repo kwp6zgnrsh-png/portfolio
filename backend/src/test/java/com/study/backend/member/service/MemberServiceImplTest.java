@@ -17,6 +17,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import com.study.backend.member.dto.response.LoginResult;
 import com.study.backend.common.util.JwtTokenProvider;
 import com.study.backend.member.exception.DuplicateMemberIdException;
+import com.study.backend.member.exception.LoginFailedException;
 import com.study.backend.member.exception.MemberException;
 import com.study.backend.member.mapper.MemberMapper;
 import com.study.backend.member.model.Member;
@@ -38,7 +39,7 @@ class MemberServiceImplTest {
         given(memberMapper.getMemberById("unknown")).willReturn(null);
 
         assertThatThrownBy(() -> memberService.authenticateMember(member("unknown", "pass")))
-            .isInstanceOf(MemberException.class)
+            .isInstanceOf(LoginFailedException.class)
             .hasMessageContaining("아이디 혹은 비밀번호가 일치하지 않습니다.");
     }
 
@@ -50,7 +51,7 @@ class MemberServiceImplTest {
         given(passwordEncoder.matches("wrongPass", "encodedPass")).willReturn(false);
 
         assertThatThrownBy(() -> memberService.authenticateMember(member("user1", "wrongPass")))
-            .isInstanceOf(MemberException.class)
+            .isInstanceOf(LoginFailedException.class)
             .hasMessageContaining("아이디 혹은 비밀번호가 일치하지 않습니다.");
     }
 
@@ -115,7 +116,7 @@ class MemberServiceImplTest {
         given(memberMapper.getMemberById("taken")).willReturn(member("taken", "pass"));
 
         assertThatThrownBy(() -> memberService.validateIdNotTaken("taken"))
-            .isInstanceOf(MemberException.class);
+            .isInstanceOf(DuplicateMemberIdException.class);
     }
 
     @Test
