@@ -13,19 +13,19 @@ java {
     }
 }
 
+sourceSets {
+    integrationTest {
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
 configurations {
     compileOnly {
         extendsFrom annotationProcessor
     }
     integrationTestImplementation.extendsFrom testImplementation
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-sourceSets {
-    integrationTest {
-        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
-        runtimeClasspath += output + compileClasspath
-    }
 }
 
 repositories {

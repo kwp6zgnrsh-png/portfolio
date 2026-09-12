@@ -15,6 +15,7 @@
                category_name AS name
         FROM category
         WHERE category_type = #{categoryType}
+        ORDER BY id
     </select>
 
     <select id="existsByIdAndType" resultType="boolean">
