@@ -128,6 +128,30 @@ class SearchRequestValidationTest {
 		assertThat(violations).isEmpty();
 	}
 
+	@Test
+	@DisplayName("검색어의 앞뒤 공백만 제거하고 내부 공백은 유지한다")
+	void searchWord_stripsOuterWhitespace() {
+		SearchRequest search = requestWithSearchWord(" \t자바 검색\n ");
+
+		assertThat(search.searchWord()).isEqualTo("자바 검색");
+	}
+
+	@Test
+	@DisplayName("검색어가 없거나 공백뿐이면 null로 처리한다")
+	void searchWord_blankBecomesNull() {
+		for (String word : new String[]{null, "", "   ", "\t\n"}) {
+			assertThat(requestWithSearchWord(word).searchWord())
+				.isNull();
+		}
+	}
+
+	private SearchRequest requestWithSearchWord(String word) {
+		return new SearchRequest(
+			null, null, null, word,
+			null, null, null, null, null
+		);
+	}
+
 	private SearchRequest request(LocalDate startDate, LocalDate endDate) {
 		return new SearchRequest(startDate, endDate, null, null, null, null, null, null, null);
 	}

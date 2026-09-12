@@ -56,6 +56,13 @@ public record SearchRequest(
 			endDate = LocalDate.now(ZoneId.of("Asia/Seoul"));
 			startDate = endDate.minusDays(365);
 		}
+		if (searchWord != null) {
+			searchWord = searchWord.strip();
+
+			if (searchWord.isEmpty()) {
+				searchWord = null;
+			}
+		}
 	}
 
 	@AssertTrue(message = "시작일과 종료일을 함께 입력해 주세요.")

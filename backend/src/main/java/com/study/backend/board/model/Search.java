@@ -30,4 +30,18 @@ public class Search {
 	private String direction;
 	private Boolean onlyMine;
 	private Long memberId;
+
+	/** 검색어의 특수문자를 이스케이프하여 부분 일치 검색 패턴을 만든다. */
+	public String getSearchPattern() {
+		if (searchWord == null || searchWord.isEmpty()) {
+			return null;
+		}
+
+		String escaped = searchWord
+			.replace("!", "!!")
+			.replace("%", "!%")
+			.replace("_", "!_");
+
+		return "%" + escaped + "%";
+	}
 }

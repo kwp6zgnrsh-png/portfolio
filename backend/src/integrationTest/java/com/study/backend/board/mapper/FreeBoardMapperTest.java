@@ -11,6 +11,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -202,6 +204,86 @@ class FreeBoardMapperTest extends IntegrationTestBase {
         assertThat(staleAffectedRows).isZero();
         assertThat(found.getTitle()).isEqualTo("첫 번째 수정");
         assertThat(found.getVersion()).isEqualTo(originalVersion + 1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"%", "_", "!", "!%_"})
+    @DisplayName("특수문자는 제목·본문·작성자에서 문자 그대로 검색된다")
+    void search_specialCharactersAreLiteral(String special) {
+        String marker = UUID.randomUUID()
+            .toString()
+            .replace("-", "")
+            .substring(0, 10);
+
+        String keyword = marker + special;
+
+        Board titleMatch = insertSearchPost(
+            "앞 " + keyword + " 뒤",
+            "일반 본문",
+            testMemberId
+        );
+
+        Board contentMatch = insertSearchPost(
+            "일반 제목",
+            "앞 " + keyword + " 뒤",
+            testMemberId
+        );
+
+        Long authorId = insertMember(
+            "author",
+            "password",
+            "앞" + keyword + "뒤"
+        );
+
+        Board authorMatch = insertSearchPost(
+            "일반 제목",
+            "일반 본문",
+            authorId
+        );
+
+        // %, _가 와일드카드로 처리되면 잘못 검색될 수 있는 글
+        insertSearchPost(
+            marker + "X",
+            marker + "다른내용",
+            testMemberId
+        );
+
+        Search search = Search.builder()
+            .searchWord(keyword)
+            .page(1)
+            .limit(10)
+            .orderByField("id")
+            .direction("DESC")
+            .build();
+
+        List<Board> result =
+            freeBoardMapper.searchPostList(search, 2L, 0);
+
+        assertThat(result)
+            .extracting(Board::getId)
+            .containsExactlyInAnyOrder(
+                titleMatch.getId(),
+                contentMatch.getId(),
+                authorMatch.getId()
+            );
+
+        assertThat(freeBoardMapper.getPostCountByCriteria(search, 2L))
+            .isEqualTo(3);
+    }
+
+    private Board insertSearchPost(
+        String title,
+        String content,
+        Long memberId
+    ) {
+        Board board = Board.builder()
+            .title(title)
+            .content(content)
+            .categoryId(1L)
+            .build();
+
+        freeBoardMapper.createPost(board, 2L, memberId);
+        return board;
     }
 
     private Search baseSearch() {

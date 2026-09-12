@@ -29,8 +29,10 @@
                 AND ${boardAlias}.category_id = #{search.categoryId}
             </if>
             <if test="search.searchWord != null and search.searchWord != ''">
-                AND (${boardAlias}.title LIKE CONCAT('%', #{search.searchWord}, '%')
-                OR ${boardAlias}.content LIKE CONCAT('%', #{search.searchWord}, '%'))
+                AND (
+                ${boardAlias}.title LIKE #{search.searchPattern} ESCAPE '!'
+                OR ${boardAlias}.content LIKE #{search.searchPattern} ESCAPE '!'
+                )
             </if>
         </where>
     </sql>
