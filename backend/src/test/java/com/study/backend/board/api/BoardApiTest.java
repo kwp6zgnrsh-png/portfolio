@@ -7,10 +7,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +24,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.study.backend.board.assembler.FreeBoardResponseAssembler;
 import com.study.backend.board.converter.BoardConverter;
 import com.study.backend.board.exception.BoardConflictException;
 import com.study.backend.board.exception.BoardNotFoundException;
@@ -32,9 +36,11 @@ import com.study.backend.board.strategy.BoardDeleteStrategy;
 import com.study.backend.board.strategy.BoardReadableStrategy;
 import com.study.backend.board.strategy.BoardStrategyFactory;
 import com.study.backend.board.strategy.BoardUpdateStrategy;
+import com.study.backend.comment.service.CommentService;
 import com.study.backend.common.exception.AuthorizationException;
 import com.study.backend.common.interceptor.JwtAuthInterceptor;
 import com.study.backend.common.interceptor.LoginRateLimitInterceptor;
+import com.study.backend.common.util.BoardQueryRunner;
 import com.study.backend.common.util.JwtTokenProvider;
 import com.study.backend.common.util.Pagination;
 import com.study.backend.file.service.FileServiceFactory;
@@ -215,8 +221,8 @@ class BoardApiTest {
         given(boardStrategy.assembleDetailResponse(any(Board.class), any())).willReturn(Map.of());
 
         mockMvc.perform(get("/api/inquiries/1")
-                .cookie(SECRET_AUTH_COOKIE))
-            .andExpect(status().isOk())
+				.cookie(SECRET_AUTH_COOKIE))
+			.andExpect(status().isOk())
             .andExpect(jsonPath("$.message").value("성공"));
     }
 
@@ -430,6 +436,72 @@ class BoardApiTest {
 					&& files[0].isEmpty()
 			)
 		);
+	}
+
+	@Test
+	@DisplayName("자유게시판 상세 조회의 작업 제출이 거절되면 503을 반환한다")
+	void boardDetail_queryRejected_returns503() throws Exception {
+		Executor rejectingExecutor = command -> {
+			throw new RejectedExecutionException("테스트용 거절");
+		};
+
+		prepareDetailQueryFailure(rejectingExecutor, 3000);
+
+		mockMvc.perform(get("/api/boards/1"))
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.message").value(
+				"일시적으로 조회할 수 없습니다. 잠시 후 다시 시도해 주세요."
+			));
+	}
+
+	@Test
+	@Timeout(5)
+	@DisplayName("자유게시판 상세 조회의 대기 시간이 초과되면 503을 반환한다")
+	void boardDetail_queryTimeout_returns503() throws Exception {
+		Executor neverRunsExecutor = command -> {
+			// 작업을 실행하지 않아 대기 시간 초과 유도
+		};
+
+		prepareDetailQueryFailure(neverRunsExecutor, 50);
+
+		mockMvc.perform(get("/api/boards/1"))
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.message").value(
+				"일시적으로 조회할 수 없습니다. 잠시 후 다시 시도해 주세요."
+			));
+	}
+
+	private void prepareDetailQueryFailure(Executor executor, long timeoutMs) throws Exception {
+		allowInterceptors();
+
+		Board board = Board.builder()
+			.id(1L)
+			.memberId(1L)
+			.boardTypeId(2L)
+			.views(0)
+			.build();
+
+		given(boardStrategyFactory.requireReadableStrategy("boards"))
+			.willReturn(boardStrategy);
+		given(boardStrategy.getPostById(1L)).willReturn(board);
+
+		BoardQueryRunner runner = new BoardQueryRunner(executor, timeoutMs);
+
+		FreeBoardResponseAssembler assembler =
+			new FreeBoardResponseAssembler(
+				mock(CommentService.class),
+				boardConverter,
+				fileServiceFactory,
+				runner
+			);
+
+		given(boardStrategy.assembleDetailResponse(eq(board), any()))
+			.willAnswer(invocation ->
+				assembler.assembleDetailResponse(
+					board,
+					invocation.getArgument(1)
+				)
+			);
 	}
 
 }

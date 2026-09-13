@@ -162,6 +162,13 @@ public class GlobalExceptionHandler {
 		return ApiResponse.of(e.getMessage());
 	}
 
+	@ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+	@ExceptionHandler(BoardQueryUnavailableException.class)
+	public ApiResponse<Void> boardQueryUnavailableException(BoardQueryUnavailableException e) {
+		log.warn("비동기 조회 작업 거절 또는 시간 초과", e);
+		return ApiResponse.of(e.getMessage());
+	}
+
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ApiResponse<Void> httpMessageNotReadableException(HttpMessageNotReadableException e) {

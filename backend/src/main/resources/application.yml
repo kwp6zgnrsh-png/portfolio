@@ -52,6 +52,7 @@ async:
     core-size: 4
     max-size: 8
     queue-capacity: 50
+  query-timeout-ms: 3000
 
 server:
   tomcat:

@@ -1,6 +1,7 @@
 package com.study.backend.common.config;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +30,7 @@ public class AsyncConfig {
 		executor.setMaxPoolSize(maxSize);
 		executor.setQueueCapacity(queueCapacity);
 		executor.setThreadNamePrefix("board-query-");
+		executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
 		executor.initialize();
 		return executor;
 	}

@@ -3,7 +3,6 @@ package com.study.backend.board.assembler;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 
 import org.springframework.stereotype.Component;
 
@@ -20,6 +19,7 @@ import com.study.backend.board.model.Page;
 import com.study.backend.comment.dto.response.CommentResponse;
 import com.study.backend.comment.model.Comment;
 import com.study.backend.comment.service.CommentService;
+import com.study.backend.common.util.BoardQueryRunner;
 import com.study.backend.file.model.FileMetaData;
 import com.study.backend.file.service.FileServiceFactory;
 
@@ -32,7 +32,7 @@ public class FreeBoardResponseAssembler {
 	private final CommentService commentService;
 	private final BoardConverter boardConverter;
 	private final FileServiceFactory fileService;
-	private final Executor boardQueryExecutor;
+	private final BoardQueryRunner boardQueryRunner;
 
 	/** 자유게시판 목록을 응답 DTO로 변환하고 페이지 정보를 함께 조립한다. */
 	public FreeBoardResponse assembleListResponse(List<Board> boardList, Page page) {
@@ -49,12 +49,11 @@ public class FreeBoardResponseAssembler {
 	public FreeBoardDetailResponse assembleDetailResponse(Board board, Long memberId) {
 		FreeBoardDetail freeBoardDetail = boardConverter.convertToFreeBoardDetail(board);
 
-		CompletableFuture<List<Comment>> commentsFuture =
-			CompletableFuture.supplyAsync(() -> getCommentByBoardId(board.getId()), boardQueryExecutor);
-		CompletableFuture<List<FileMetaData>> filesFuture =
-			CompletableFuture.supplyAsync(() -> getFilesByBoardId(board.getId()), boardQueryExecutor);
+		CompletableFuture<List<Comment>> commentsFuture = boardQueryRunner.submit(() -> getCommentByBoardId(board.getId()));
 
-		CompletableFuture.allOf(commentsFuture, filesFuture).join();
+		CompletableFuture<List<FileMetaData>> filesFuture = boardQueryRunner.submit(() -> getFilesByBoardId(board.getId()));
+
+		boardQueryRunner.awaitAll(commentsFuture, filesFuture);
 
 		return FreeBoardDetailResponse.builder()
 			.freeBoardDetail(freeBoardDetail)
