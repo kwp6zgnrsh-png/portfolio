@@ -83,19 +83,12 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 	/** 기존 파일·썸네일을 교체하고 게시글을 수정한다. 신규 파일의 롤백 정리는 생성 서비스가 담당한다. */
 	@Transactional
 	public void updatePost(Long boardId, BoardUpdateRequest board, Long memberId, MultipartFile[] files) {
-		Board updateBoard = mapper.getPostById(boardId);
-		validateOwnership(
-			updateBoard,
-			memberId,
-			"수정할 수 있는 권한이 없습니다."
-		);
-
+		Board updateBoard = mapper.getPostForMutation(boardId);
+		validateOwnership(updateBoard, memberId, "수정할 수 있는 권한이 없습니다.");
 		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 
 		boolean hasNewFiles = FileChangeUtils.hasNewFiles(files);
 		boolean hasDeletedFiles = FileChangeUtils.hasDeletedFiles(board.getDeleteFiles());
-
-		// 파일 변경이 없으면 게시글 데이터만 수정한다.
 		if (!hasNewFiles && !hasDeletedFiles) {
 			updateBoardData(boardId, board, memberId);
 			return;
@@ -139,7 +132,7 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 	/** 게시글을 삭제한다. 작성자 본인만 가능하다. */
 	@Transactional
 	public void deletePost(Long boardId, Long memberId) {
-		Board board = mapper.getPostById(boardId);
+		Board board = mapper.getPostForMutation(boardId);
 		validateOwnership(board, memberId, "삭제할 수 있는 권한이 없습니다.");
 
 		ThumbnailMetaData thumbnail = thumbnailService.getThumbnailByBoardId(boardId);

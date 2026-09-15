@@ -56,8 +56,8 @@ class FreeBoardServiceTest {
 	@DisplayName("게시글이 존재하지 않으면 수정 시 예외를 던진다")
 	void updatePost_boardNotFound_throws() {
 		BoardUpdateRequest update = boardUpdate();
-		given(freeBoardMapper.getPostById(1L)).willReturn(null);
-
+		given(freeBoardMapper.getPostForMutation(1L))
+			.willReturn(null);
         assertThatThrownBy(() -> freeBoardService.updatePost(1L, update, 1L, null))
 			.isInstanceOf(BoardNotFoundException.class);
 	}
@@ -66,7 +66,6 @@ class FreeBoardServiceTest {
 	@DisplayName("게시판 타입이 다르면 존재하지 않는 게시글로 처리한다")
 	void getPostById_differentBoardType_throwsNotFound() {
 		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L, BoardType.INQUIRIES));
-
 		assertThatThrownBy(() -> freeBoardService.getPostById(1L))
 			.isInstanceOf(BoardNotFoundException.class)
 			.hasMessage("존재하지 않는 게시글입니다.");
@@ -76,8 +75,8 @@ class FreeBoardServiceTest {
     @DisplayName("작성자가 아니면 수정 시 예외를 던진다")
     void updatePost_notOwner_throws() {
         BoardUpdateRequest update = boardUpdate();
-        given(freeBoardMapper.getPostById(1L)).willReturn(board(2L));
-
+		given(freeBoardMapper.getPostForMutation(1L))
+			.willReturn(board(2L));
         assertThatThrownBy(() -> freeBoardService.updatePost(1L, update, 1L, null))
             .isInstanceOf(BoardPermissionDeniedException.class);
     }
@@ -87,7 +86,7 @@ class FreeBoardServiceTest {
     @DisplayName("작성자 본인이면 수정이 정상 처리된다")
     void updatePost_owner_success() {
 		BoardUpdateRequest update = boardUpdate();
-		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
+		given(freeBoardMapper.getPostForMutation(1L)).willReturn(board(1L));
 		then(fileServiceFactory).shouldHaveNoInteractions();
 		given(freeBoardMapper.updatePost(1L, update, 1L)).willReturn(1);
 
@@ -105,7 +104,7 @@ class FreeBoardServiceTest {
 
 		given(mockFile.isEmpty()).willReturn(false);
 
-		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
+		given(freeBoardMapper.getPostForMutation(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
 
 		given(freeBoardMapper.updatePost(1L, update, 1L)).willReturn(1);
@@ -122,8 +121,7 @@ class FreeBoardServiceTest {
     @Test
     @DisplayName("게시글이 존재하지 않으면 삭제 시 예외를 던진다")
     void deletePost_boardNotFound_throws() {
-        given(freeBoardMapper.getPostById(1L)).willReturn(null);
-
+		given(freeBoardMapper.getPostForMutation(1L)).willReturn(null);
         assertThatThrownBy(() -> freeBoardService.deletePost(1L, 1L))
             .isInstanceOf(BoardNotFoundException.class);
     }
@@ -131,8 +129,7 @@ class FreeBoardServiceTest {
     @Test
     @DisplayName("작성자가 아니면 삭제 시 예외를 던진다")
     void deletePost_notOwner_throws() {
-        given(freeBoardMapper.getPostById(1L)).willReturn(board(2L));
-
+		given(freeBoardMapper.getPostForMutation(1L)).willReturn(board(2L));
         assertThatThrownBy(() -> freeBoardService.deletePost(1L, 1L))
             .isInstanceOf(BoardPermissionDeniedException.class);
     }
@@ -140,7 +137,7 @@ class FreeBoardServiceTest {
     @Test
     @DisplayName("작성자 본인이면 삭제가 정상 처리된다")
     void deletePost_owner_success() {
-		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
+		given(freeBoardMapper.getPostForMutation(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
 		given(freeBoardMapper.deletePost(1L, 1L))
 			.willReturn(1);
@@ -153,7 +150,7 @@ class FreeBoardServiceTest {
 	void updatePost_staleVersion_throwsConflict() {
 		BoardUpdateRequest update = boardUpdate();
 
-		given(freeBoardMapper.getPostById(1L))
+		given(freeBoardMapper.getPostForMutation(1L))
 			.willReturn(board(1L));
 		given(freeBoardMapper.updatePost(1L, update, 1L))
 			.willReturn(0);
@@ -178,9 +175,8 @@ class FreeBoardServiceTest {
 		RuntimeException failure = new RuntimeException("update failed");
 
 		given(mockFile.isEmpty()).willReturn(false);
-		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
-		given(fileServiceFactory.getFileService(BoardType.BOARDS))
-			.willReturn(fileService);
+		given(freeBoardMapper.getPostForMutation(1L)).willReturn(board(1L));
+		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
 
 		willThrow(failure)
 			.given(freeBoardMapper)

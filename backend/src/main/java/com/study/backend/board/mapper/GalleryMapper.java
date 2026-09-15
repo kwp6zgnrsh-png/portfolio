@@ -14,4 +14,6 @@ public interface GalleryMapper extends BoardMapper {
 	int updatePost(Long boardId, BoardUpdateRequest board, Long memberId);
 
 	int deletePost(Long boardId, Long memberId);
+
+	Board getPostForMutation(Long boardId);
 }

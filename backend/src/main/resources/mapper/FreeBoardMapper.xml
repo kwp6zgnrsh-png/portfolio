@@ -156,6 +156,18 @@
         LIMIT 5
     </select>
 
+    <select id="getPostForMutation"
+            resultType="com.study.backend.board.model.Board">
+        SELECT id,
+               member_id AS memberId,
+               board_type_id AS boardTypeId,
+               version
+        FROM board
+        WHERE id = #{boardId}
+          AND state = false
+            FOR UPDATE
+    </select>
+
     <update id="updatePost">
         UPDATE board
         SET title = #{board.title}, content =#{board.content}, category_id = #{board.categoryId}, version = version + 1
@@ -172,5 +184,6 @@
         SET state = true
         WHERE id = #{boardId} AND member_id = #{memberId} AND state = false
     </update>
+
 
 </mapper>

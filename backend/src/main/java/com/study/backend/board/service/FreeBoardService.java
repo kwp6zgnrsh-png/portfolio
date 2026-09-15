@@ -10,6 +10,7 @@ import com.study.backend.board.mapper.FreeBoardMapper;
 import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
 import com.study.backend.category.service.CategoryService;
+import com.study.backend.file.exception.FileException;
 import com.study.backend.file.service.FileService;
 import com.study.backend.file.service.FileServiceFactory;
 import com.study.backend.file.util.FileChangeUtils;
@@ -36,13 +37,19 @@ public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
 	/** 자유게시판 게시글에 첨부 파일을 저장한다. */
 	@Transactional
 	public void createFiles(Long boardId, MultipartFile[] files) {
+		Board board = mapper.getPostForMutation(boardId);
+
+		if (board == null || !BoardType.BOARDS.id().equals(board.getBoardTypeId())) {
+			throw new FileException("첨부할 게시글이 없거나 삭제되었습니다.");
+		}
+
 		fileService.getFileService(BoardType.BOARDS).createFiles(boardId, files);
 	}
 
 	/** 기존 파일을 삭제하고 새 파일과 함께 게시글 내용을 수정한다. 작성자 본인만 가능하다. */
 	@Transactional
 	public void updatePost(Long boardId, BoardUpdateRequest board, Long memberId, MultipartFile[] files) {
-		Board updateBoard = mapper.getPostById(boardId);
+		Board updateBoard = mapper.getPostForMutation(boardId);
 		validateOwnership(updateBoard, memberId, "수정할 수 있는 권한이 없습니다.");
 		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 
@@ -80,7 +87,7 @@ public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
 	/** 게시글을 삭제한다. 작성자 본인만 가능하다. */
 	@Transactional
 	public void deletePost(Long boardId, Long memberId) {
-		Board board = mapper.getPostById(boardId);
+		Board board = mapper.getPostForMutation(boardId);
 		validateOwnership(board, memberId, "삭제할 수 있는 권한이 없습니다.");
 
 		int affectedRows = mapper.deletePost(boardId, memberId);

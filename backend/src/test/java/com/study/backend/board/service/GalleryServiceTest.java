@@ -95,18 +95,16 @@ class GalleryServiceTest {
     @DisplayName("게시글이 존재하지 않으면 수정 시 예외를 던진다")
     void updatePost_boardNotFound_throws() {
         BoardUpdateRequest update = boardUpdate();
-        given(galleryMapper.getPostById(1L)).willReturn(null);
-
+		given(galleryMapper.getPostForMutation(1L)).willReturn(null);
         assertThatThrownBy(() -> galleryService.updatePost(1L, update, 1L, null))
-            .isInstanceOf(BoardNotFoundException.class);
+			.isInstanceOf(BoardNotFoundException.class);
     }
 
     @Test
     @DisplayName("작성자가 아니면 수정 시 예외를 던진다")
     void updatePost_notOwner_throws() {
         BoardUpdateRequest update = boardUpdate();
-        given(galleryMapper.getPostById(1L)).willReturn(board(2L));
-
+		given(galleryMapper.getPostForMutation(1L)).willReturn(board(2L));
         assertThatThrownBy(() -> galleryService.updatePost(1L, update, 1L, null))
             .isInstanceOf(BoardPermissionDeniedException.class);
     }
@@ -120,7 +118,7 @@ class GalleryServiceTest {
 		MultipartFile[] files = {mockFile};
 
 		given(mockFile.isEmpty()).willReturn(false);
-		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+		given(galleryMapper.getPostForMutation(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
 		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
 		given(fileService.createFiles(1L, files)).willReturn(List.of());
@@ -143,7 +141,7 @@ class GalleryServiceTest {
 		MultipartFile[] files = {mockFile};
 
 		given(mockFile.isEmpty()).willReturn(false);
-		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+		given(galleryMapper.getPostForMutation(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
 		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
 		given(fileService.createFiles(1L, files)).willReturn(List.of());
@@ -170,7 +168,7 @@ class GalleryServiceTest {
 
 		given(mockFile.isEmpty()).willReturn(false);
 		given(fileService.createFiles(1L, files)).willReturn(List.of());
-		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+		given(galleryMapper.getPostForMutation(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
 		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(thumbnailMetaData());
 		given(fileService.getFirstFileByBoardId(1L)).willReturn(file);
@@ -196,7 +194,8 @@ class GalleryServiceTest {
 		RuntimeException failure = new RuntimeException("update failed");
 
 		given(mockFile.isEmpty()).willReturn(false);
-		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+		given(galleryMapper.getPostForMutation(1L))
+			.willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES))
 			.willReturn(fileService);
 		given(fileService.getFirstFileByBoardId(1L))
@@ -221,8 +220,8 @@ class GalleryServiceTest {
     @Test
     @DisplayName("게시글이 존재하지 않으면 삭제 시 예외를 던진다")
     void deletePost_boardNotFound_throws() {
-        given(galleryMapper.getPostById(1L)).willReturn(null);
-
+		given(galleryMapper.getPostForMutation(1L))
+			.willReturn(null);
         assertThatThrownBy(() -> galleryService.deletePost(1L, 1L))
             .isInstanceOf(BoardNotFoundException.class);
     }
@@ -230,8 +229,8 @@ class GalleryServiceTest {
     @Test
     @DisplayName("작성자가 아니면 삭제 시 예외를 던진다")
     void deletePost_notOwner_throws() {
-        given(galleryMapper.getPostById(1L)).willReturn(board(2L));
-
+		given(galleryMapper.getPostForMutation(1L))
+			.willReturn(board(2L));
         assertThatThrownBy(() -> galleryService.deletePost(1L, 1L))
             .isInstanceOf(BoardPermissionDeniedException.class);
     }
@@ -239,7 +238,7 @@ class GalleryServiceTest {
     @Test
     @DisplayName("작성자 본인이면 삭제 시 파일과 썸네일이 함께 삭제된다")
     void deletePost_owner_filesAndThumbnailDeleted() {
-		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+		given(galleryMapper.getPostForMutation(1L)).willReturn(board(1L));
 		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
         given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(null);
 		given(galleryMapper.deletePost(1L, 1L)).willReturn(1);
@@ -256,7 +255,7 @@ class GalleryServiceTest {
 	void updatePost_staleVersion_throwsConflict() {
 		BoardUpdateRequest update = boardUpdate();
 
-		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+		given(galleryMapper.getPostForMutation(1L)).willReturn(board(1L));
 		given(galleryMapper.updatePost(1L, update, 1L)).willReturn(0);
 
 		assertThatThrownBy(() -> galleryService.updatePost(1L, update, 1L, null))
@@ -272,8 +271,7 @@ class GalleryServiceTest {
 	void updatePost_withoutFileChanges_updatesBoardOnly() {
 		BoardUpdateRequest update = boardUpdate();
 
-		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
-
+		given(galleryMapper.getPostForMutation(1L)).willReturn(board(1L));
 		given(galleryMapper.updatePost(1L, update, 1L)).willReturn(1);
 
 		galleryService.updatePost(
