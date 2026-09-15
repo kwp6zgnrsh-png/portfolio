@@ -3,7 +3,6 @@ package com.study.backend.board.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -27,6 +26,7 @@ import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
 import com.study.backend.category.model.CategoryType;
 import com.study.backend.category.service.CategoryService;
+import com.study.backend.file.cleanup.service.UploadCleanupService;
 import com.study.backend.file.exception.FileException;
 import com.study.backend.file.model.FileMetaData;
 import com.study.backend.file.service.FileService;
@@ -45,6 +45,7 @@ class GalleryServiceTest {
     @Mock ThumbnailService thumbnailService;
     @Mock ApplicationEventPublisher eventPublisher;
 	@Mock CategoryService categoryService;
+	@Mock UploadCleanupService uploadCleanupService;
 
     @InjectMocks GalleryService galleryService;
 
@@ -182,35 +183,37 @@ class GalleryServiceTest {
 	}
 
 	@Test
-	@DisplayName("수정 실패 시 새 파일만 정리하고 기존 썸네일은 보존한다")
-	void updatePost_failureAfterThumbnail_cleanupCreatedFilesAndPreserveOldThumbnail() throws Exception {
+	@DisplayName("썸네일 생성 후 수정 실패 시 예외를 그대로 전파한다")
+	void updatePost_failureAfterThumbnail_propagatesException() {
 		BoardUpdateRequest update = boardUpdate();
+
 		org.springframework.web.multipart.MultipartFile mockFile =
 			mock(org.springframework.web.multipart.MultipartFile.class);
-		org.springframework.web.multipart.MultipartFile[] files = { mockFile };
-		FileMetaData file = fileMetaData();
-		Path createdFile = Files.writeString(tempDir.resolve("created.png"), "new");
-		Path thumbnailDirectory = Files.createDirectories(tempDir.resolve("thumbnail"));
-		Path oldThumbnail = Files.writeString(thumbnailDirectory.resolve("stored.jpeg"), "old-thumb");
-		Path createdThumbnail = Files.writeString(thumbnailDirectory.resolve("created.jpeg"), "new-thumb");
-		ReflectionTestUtils.setField(galleryService, "storePath", tempDir.toString());
 
-		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
-		given(fileServiceFactory.getFileService(BoardType.GALLERIES)).willReturn(fileService);
-		given(thumbnailService.getThumbnailByBoardId(1L)).willReturn(thumbnailMetaData());
-		given(fileService.createFiles(1L, files)).willReturn(List.of(createdFile));
-		given(fileService.getFirstFileByBoardId(1L)).willReturn(file);
-		given(thumbnailService.saveThumbnail(any(), eq(1L))).willReturn(createdThumbnail);
+		org.springframework.web.multipart.MultipartFile[] files = {mockFile};
+
+		Path createdThumbnail = tempDir.resolve("created.jpeg");
+		RuntimeException failure = new RuntimeException("update failed");
+
 		given(mockFile.isEmpty()).willReturn(false);
+		given(galleryMapper.getPostById(1L)).willReturn(board(1L));
+		given(fileServiceFactory.getFileService(BoardType.GALLERIES))
+			.willReturn(fileService);
+		given(fileService.getFirstFileByBoardId(1L))
+			.willReturn(fileMetaData());
+		given(thumbnailService.saveThumbnail(any(), eq(1L)))
+			.willReturn(createdThumbnail);
 
-		willThrow(new RuntimeException("update failed")).given(galleryMapper).updatePost(1L, update, 1L);
+		willThrow(failure)
+			.given(galleryMapper)
+			.updatePost(1L, update, 1L);
 
-		assertThatThrownBy(() -> galleryService.updatePost(1L, update, 1L, files))
-			.isInstanceOf(RuntimeException.class);
+		assertThatThrownBy(
+			() -> galleryService.updatePost(1L, update, 1L, files)
+		).isSameAs(failure);
 
-		assertThat(Files.exists(createdFile)).isFalse();
-		assertThat(Files.exists(createdThumbnail)).isFalse();
-		assertThat(oldThumbnail).hasContent("old-thumb");
+		then(fileService).should().createFiles(1L, files);
+		then(thumbnailService).should().saveThumbnail(any(), eq(1L));
 	}
 
     // ── deletePost ──────────────────────────────────────────────────────

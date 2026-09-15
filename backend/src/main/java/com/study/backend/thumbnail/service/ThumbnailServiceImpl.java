@@ -2,8 +2,8 @@ package com.study.backend.thumbnail.service;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -11,7 +11,8 @@ import org.springframework.stereotype.Service;
 
 import net.coobird.thumbnailator.Thumbnails;
 
-import com.study.backend.file.exception.FileException;
+import com.study.backend.file.cleanup.service.UploadCleanupService;
+import com.study.backend.file.exception.FileStorageException;
 import com.study.backend.file.util.PathUtils;
 import com.study.backend.file.validation.ImageDimensionValidator;
 import com.study.backend.thumbnail.dto.SourceImage;
@@ -27,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ThumbnailServiceImpl implements ThumbnailService {
 
 	private final ThumbnailMapper thumbnailMapper;
+	private final UploadCleanupService uploadCleanupService;
 
 	@Value("${store.base-path}")
 	private String storePath;
@@ -50,24 +52,40 @@ public class ThumbnailServiceImpl implements ThumbnailService {
 	@Override
 	public Path saveThumbnail(SourceImage sourceImage, Long boardId) {
 		String thumbnailStoreName = UUID.randomUUID().toString();
-		String absolutePath = PathUtils.joinStoreFilePath(storePath, thumbnailPath, thumbnailStoreName, ".jpeg");
-		Path savedThumbnailPath = Path.of(absolutePath);
-		long fileSize = saveThumbnailFile(sourceImage, absolutePath);
 
-		ThumbnailMetaData thumbnailMeta = ThumbnailMetaData.builder()
-			.fileName(sourceImage.fileName())
-			.storeName(thumbnailStoreName)
-			.extension(".jpeg")
-			.path(thumbnailPath)
-			.fileSize(fileSize)
-			.boardId(boardId)
-			.build();
+		String absolutePath = PathUtils.joinStoreFilePath(
+			storePath,
+			thumbnailPath,
+			thumbnailStoreName,
+			".jpeg"
+		);
+
+		Path savedThumbnailPath = Path.of(absolutePath);
+		List<Path> createdPaths = List.of(savedThumbnailPath);
+
+		boolean rollbackManaged =
+			uploadCleanupService.registerRollbackCleanup(createdPaths);
 
 		try {
+			long fileSize = saveThumbnailFile(sourceImage, absolutePath);
+
+			ThumbnailMetaData thumbnailMeta = ThumbnailMetaData.builder()
+				.fileName(sourceImage.fileName())
+				.storeName(thumbnailStoreName)
+				.extension(".jpeg")
+				.path(thumbnailPath)
+				.fileSize(fileSize)
+				.boardId(boardId)
+				.build();
+
 			thumbnailMapper.createThumbnail(thumbnailMeta);
+
 			return savedThumbnailPath;
-		} catch (Exception e) {
-			deleteThumbnailFile(savedThumbnailPath);
+		} catch (RuntimeException e) {
+			if (!rollbackManaged) {
+				uploadCleanupService.cleanupFiles(createdPaths);
+			}
+
 			throw e;
 		}
 	}
@@ -95,17 +113,8 @@ public class ThumbnailServiceImpl implements ThumbnailService {
 			return thumbnail.length();
 
 		} catch (IOException e) {
-			deleteThumbnailFile(thumbnail.toPath());
-			throw new FileException("썸네일 저장에 실패했습니다.", e);
+			throw new FileStorageException("썸네일 생성 또는 저장 중 입출력 오류가 발생했습니다.", e
+			);
 		}
 	}
-
-	private void deleteThumbnailFile(Path path) {
-		try {
-			Files.deleteIfExists(path);
-		} catch (IOException e) {
-			log.error("썸네일 파일 정리 실패: {}", path, e);
-		}
-	}
-
 }

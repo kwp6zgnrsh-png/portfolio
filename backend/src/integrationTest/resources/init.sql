@@ -221,6 +221,20 @@ CREATE TABLE `thumbnail` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
+DROP TABLE IF EXISTS file_cleanup_task;
+CREATE TABLE file_cleanup_task (
+   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+   `task_type` VARCHAR(20) NOT NULL,
+   `source_path` VARCHAR(1024) NOT NULL,
+   `destination_path` VARCHAR(1024) NULL,
+   `attempts` INT NOT NULL DEFAULT 0,
+   `next_attempt_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   `last_error` TEXT NULL,
+   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+   INDEX idx_cleanup_due (`next_attempt_at`, `id`)
+);
+
 -- 참조 테이블 시드 데이터
 INSERT INTO `board_type` (`id`, `type`) VALUES
 (1, 'notice'),

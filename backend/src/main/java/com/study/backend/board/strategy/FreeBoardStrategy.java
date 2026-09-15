@@ -14,6 +14,7 @@ import com.study.backend.board.model.Page;
 import com.study.backend.board.model.Search;
 import com.study.backend.board.service.FreeBoardService;
 import com.study.backend.file.exception.FileException;
+import com.study.backend.file.exception.FileStorageException;
 import com.study.backend.file.service.FileServiceFactory;
 
 import lombok.RequiredArgsConstructor;
@@ -43,7 +44,7 @@ public class FreeBoardStrategy implements BoardReadableStrategy, BoardCreateStra
 		return responseAssembler.assembleListResponse(boardList, page);
 	}
 
-	/** 파일 저장 실패 시에도 게시글은 롤백하지 않는다. */
+	/** 파일 검증·저장 실패 시 게시글은 유지하고 파일 업로드 실패를 알린다. */
 	@Override
 	public BoardCreateResult createPost(Board board, Long boardTypeId, Long memberId, MultipartFile[] files) {
 		boardService.createPost(board, boardTypeId, memberId);
@@ -52,7 +53,7 @@ public class FreeBoardStrategy implements BoardReadableStrategy, BoardCreateStra
 			try {
 				fileService.getFileService(BoardType.BOARDS).validateFiles(files);
 				boardService.createFiles(board.getId(), files);
-			} catch (FileException e) {
+			} catch (FileException | FileStorageException e) {
 				log.warn("게시글은 등록됐지만 파일 저장 실패: boardId={}", board.getId(), e);
 				return BoardCreateResult.withFileUploadFailure();
 			}

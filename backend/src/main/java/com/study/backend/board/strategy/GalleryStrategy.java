@@ -13,7 +13,6 @@ import com.study.backend.board.model.BoardType;
 import com.study.backend.board.model.Page;
 import com.study.backend.board.model.Search;
 import com.study.backend.board.service.GalleryService;
-import com.study.backend.file.exception.FileException;
 import com.study.backend.file.exception.RequiredFileException;
 import com.study.backend.file.util.FileChangeUtils;
 
@@ -46,11 +45,8 @@ public class GalleryStrategy implements BoardReadableStrategy, BoardCreateStrate
 		if (!FileChangeUtils.hasNewFiles(files)) {
 			throw new RequiredFileException("갤러리 게시글에는 이미지가 필요합니다.");
 		}
-		try {
-			boardService.createPostWithFilesAndThumbnail(board, boardTypeId, memberId, files);
-		} catch (FileException e) {
-			throw new FileException("파일을 다시 업로드해주세요.", e);
-		}
+		boardService.createPostWithFilesAndThumbnail(board, boardTypeId, memberId, files);
+
 		return BoardCreateResult.success();
 	}
 

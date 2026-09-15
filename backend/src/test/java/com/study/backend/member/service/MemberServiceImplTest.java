@@ -2,20 +2,19 @@ package com.study.backend.member.service;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
-import static org.mockito.Mockito.inOrder;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.InOrder;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-import com.study.backend.member.dto.response.LoginResult;
 import com.study.backend.common.util.JwtTokenProvider;
+import com.study.backend.member.dto.response.LoginResult;
 import com.study.backend.member.exception.DuplicateMemberIdException;
 import com.study.backend.member.exception.LoginFailedException;
 import com.study.backend.member.exception.MemberException;
@@ -147,7 +146,9 @@ class MemberServiceImplTest {
         given(memberMapper.getMemberById("newId")).willReturn(null);
         given(memberMapper.isIdBlocked("newId")).willReturn(false);
         given(passwordEncoder.encode("ab12cd34")).willReturn("encoded");
-        willThrow(new DataIntegrityViolationException("duplicate")).given(memberMapper).createMember(any(Member.class));
+        willThrow(new DuplicateKeyException("duplicate"))
+            .given(memberMapper)
+            .createMember(any(Member.class));
 
         assertThatThrownBy(() -> memberService.createMember(member, "ab12cd34"))
             .isInstanceOf(DuplicateMemberIdException.class)

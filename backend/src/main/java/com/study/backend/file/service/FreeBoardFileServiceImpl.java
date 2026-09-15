@@ -3,10 +3,10 @@ package com.study.backend.file.service;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-import org.springframework.context.ApplicationEventPublisher;
-
+import com.study.backend.file.cleanup.service.UploadCleanupService;
 import com.study.backend.file.mapper.FileMapper;
 import com.study.backend.file.model.FileTypes;
 
@@ -28,8 +28,10 @@ public class FreeBoardFileServiceImpl extends AbstractFileService {
 	@Value("${free-board.max-file-count}")
 	private int maxFileCount;
 
-	public FreeBoardFileServiceImpl(FileMapper fileMapper, ApplicationEventPublisher eventPublisher) {
-		super(fileMapper, eventPublisher);
+	public FreeBoardFileServiceImpl(FileMapper fileMapper,
+								    ApplicationEventPublisher eventPublisher,
+								    UploadCleanupService uploadCleanupService) {
+		super(fileMapper, eventPublisher, uploadCleanupService);
 	}
 
 	@Override

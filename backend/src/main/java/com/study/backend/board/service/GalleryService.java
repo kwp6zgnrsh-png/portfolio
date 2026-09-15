@@ -1,9 +1,6 @@
 package com.study.backend.board.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -24,15 +21,11 @@ import com.study.backend.file.model.FileMetaData;
 import com.study.backend.file.service.FileService;
 import com.study.backend.file.service.FileServiceFactory;
 import com.study.backend.file.util.FileChangeUtils;
-import com.study.backend.file.util.FileCleanupHelper;
 import com.study.backend.file.util.PathUtils;
 import com.study.backend.thumbnail.dto.SourceImage;
 import com.study.backend.thumbnail.model.ThumbnailMetaData;
 import com.study.backend.thumbnail.service.ThumbnailService;
 
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
 @Service
 public class GalleryService extends AbstractBoardService<GalleryMapper> {
 
@@ -60,18 +53,17 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 		mapper.createPost(board, boardTypeId, memberId);
 	}
 
-	/** 갤러리 게시글, 원본 이미지, 썸네일을 하나의 성공 단위로 등록한다. */
+	/** 갤러리 게시글, 원본 이미지, 썸네일을 하나의 트랜잭션으로 등록한다. */
 	@Transactional
 	public void createPostWithFilesAndThumbnail(Board board, Long boardTypeId, Long memberId, MultipartFile[] files) {
-		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
+		categoryService.validateCategory(
+			board.getCategoryId(),
+			boardType().categoryType()
+		);
+
 		mapper.createPost(board, boardTypeId, memberId);
-		FileService fs = fileService.getFileService(BoardType.GALLERIES);
-		try {
-			createFilesAndThumbnail(board.getId(), files);
-		} catch (RuntimeException e) {
-			cleanupCreatedFiles(fs, board.getId());
-			throw e;
-		}
+
+		createFilesAndThumbnail(board.getId(), files);
 	}
 
 	/** 파일 저장 + 썸네일 생성은 하나의 트랜잭션 — 썸네일 실패 시 파일 메타데이터도 롤백한다. */
@@ -88,17 +80,22 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 		thumbnailService.saveThumbnail(buildThumbnail(firstFile), boardId);
 	}
 
-	/** 기존 파일·썸네일을 삭제하고 새 파일·썸네일과 함께 게시글을 수정한다. 작성자 본인만 가능하다. */
+	/** 기존 파일·썸네일을 교체하고 게시글을 수정한다. 신규 파일의 롤백 정리는 생성 서비스가 담당한다. */
 	@Transactional
 	public void updatePost(Long boardId, BoardUpdateRequest board, Long memberId, MultipartFile[] files) {
 		Board updateBoard = mapper.getPostById(boardId);
-		validateOwnership(updateBoard, memberId, "수정할 수 있는 권한이 없습니다.");
+		validateOwnership(
+			updateBoard,
+			memberId,
+			"수정할 수 있는 권한이 없습니다."
+		);
+
 		categoryService.validateCategory(board.getCategoryId(), boardType().categoryType());
 
 		boolean hasNewFiles = FileChangeUtils.hasNewFiles(files);
-
 		boolean hasDeletedFiles = FileChangeUtils.hasDeletedFiles(board.getDeleteFiles());
 
+		// 파일 변경이 없으면 게시글 데이터만 수정한다.
 		if (!hasNewFiles && !hasDeletedFiles) {
 			updateBoardData(boardId, board, memberId);
 			return;
@@ -106,38 +103,30 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 
 		FileService fs = fileService.getFileService(BoardType.GALLERIES);
 
-		List<Path> createdFiles = new ArrayList<>();
-		FileCleanupHelper.registerRollbackCleanup(createdFiles);
-		try {
-			ThumbnailMetaData oldThumbnail = thumbnailService.getThumbnailByBoardId(boardId);
-			thumbnailService.deleteThumbnail(boardId);
+		ThumbnailMetaData oldThumbnail = thumbnailService.getThumbnailByBoardId(boardId);
 
-			fs.validateFileCountForUpdate(boardId, board.getDeleteFiles(), files);
-			fs.deleteFiles(boardId, board.getDeleteFiles());
-			if (hasNewFiles) {
-				FileCleanupHelper.addFiles(createdFiles, fs.createFiles(boardId, files));
-			}
+		thumbnailService.deleteThumbnail(boardId);
 
-			FileMetaData firstFile = fs.getFirstFileByBoardId(boardId);
-			if (firstFile == null) {
-				throw new FileException("파일 저장에 실패했습니다.");
-			}
+		fs.validateFileCountForUpdate(
+			boardId,
+			board.getDeleteFiles(),
+			files
+		);
 
-			Path thumbnailPath = thumbnailService.saveThumbnail(buildThumbnail(firstFile), boardId);
-			if (thumbnailPath != null) {
-				createdFiles.add(thumbnailPath);
-			}
-			publishThumbnailDeleteEventIfChanged(oldThumbnail, thumbnailPath);
+		fs.deleteFiles(boardId, board.getDeleteFiles());
 
-			int affectedRows = mapper.updatePost(boardId, board, memberId);
-			if (affectedRows != 1) {
-				throw new BoardConflictException("게시글 상태가 변경되어 수정할 수 없습니다.");
-			}
-
-		} catch (RuntimeException e) {
-			FileCleanupHelper.cleanupFiles(createdFiles);
-			throw e;
+		if (hasNewFiles) {
+			fs.createFiles(boardId, files);
 		}
+
+		FileMetaData firstFile = fs.getFirstFileByBoardId(boardId);
+		if (firstFile == null) {
+			throw new FileException("파일 저장에 실패했습니다.");
+		}
+
+		Path thumbnailPath = thumbnailService.saveThumbnail(buildThumbnail(firstFile), boardId);
+		publishThumbnailDeleteEventIfChanged(oldThumbnail, thumbnailPath);
+		updateBoardData(boardId, board, memberId);
 	}
 
 	/** 수정 폼에 필요한 게시글을 조회한다. 존재하지 않거나 작성자가 아니면 예외를 던진다. */
@@ -190,34 +179,6 @@ public class GalleryService extends AbstractBoardService<GalleryMapper> {
 			.path(file.getPath())
 			.extension(file.getExtension())
 			.build();
-	}
-
-	/**
-	 * 게시글 생성 실패 시 이미 저장된 파일들을 정리한다.
-	 * 정리 중 발생하는 예외는 로깅만 하고 전파하지 않는다.
-	 */
-	private void cleanupCreatedFiles(FileService fs, Long boardId) {
-		List<FileMetaData> files;
-		try {
-			files = fs.getFilesByBoardId(boardId);
-		} catch (RuntimeException e) {
-			log.error("갤러리 생성 실패 후 파일 목록 조회 실패: boardId={}", boardId, e);
-			return;
-		}
-		if (files == null || files.isEmpty()) {
-			return;
-		}
-		for (FileMetaData file : files) {
-			Path path = Path.of(
-				fs.resolveAbsolutePath(file.getPath()),
-				file.getStoreName() + file.getExtension()
-			);
-			try {
-				Files.deleteIfExists(path);
-			} catch (IOException cleanupException) {
-				log.error("갤러리 생성 실패 후 파일 정리 실패: {}", path, cleanupException);
-			}
-		}
 	}
 
 	private void updateBoardData(Long boardId, BoardUpdateRequest board, Long memberId) {

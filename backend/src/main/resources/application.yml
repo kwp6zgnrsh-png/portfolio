@@ -10,6 +10,10 @@ spring:
     multipart:
       max-file-size: 2MB
       max-request-size: 25MB
+  task:
+    scheduling:
+      pool:
+        size: 2
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -53,6 +57,17 @@ async:
     max-size: 8
     queue-capacity: 50
   query-timeout-ms: 3000
+
+file:
+  cleanup:
+    enabled: false
+    fixed-delay-ms: 60000
+    initial-delay-ms: 60000
+
+  orphan:
+    minimum-age-hours: 24
+    retention-days: 7
+    recovery-enabled: false
 
 server:
   tomcat:

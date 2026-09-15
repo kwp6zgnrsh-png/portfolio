@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.study.backend.file.cleanup.mapper.FileCleanupTaskMapper">
+
+    <insert id="insertTask">
+        INSERT INTO file_cleanup_task (
+        task_type,
+        source_path,
+        destination_path
+        )
+        VALUES (
+        #{taskType},
+        #{sourcePath},
+        #{destinationPath}
+        )
+    </insert>
+
+    <insert id="insertDelayedDelete">
+        INSERT INTO file_cleanup_task (
+        task_type,
+        source_path,
+        destination_path,
+        next_attempt_at
+        )
+        VALUES (
+        'DELETE',
+        #{sourcePath},
+        NULL,
+        DATE_ADD(CURRENT_TIMESTAMP, INTERVAL #{retentionDays} DAY)
+        )
+    </insert>
+
+    <select id="findDueTasks" resultType="com.study.backend.file.cleanup.model.FileCleanupTask">
+        SELECT
+        id,
+        task_type,
+        source_path,
+        destination_path,
+        attempts,
+        next_attempt_at,
+        last_error,
+        created_at
+        FROM file_cleanup_task
+        WHERE next_attempt_at &lt;= CURRENT_TIMESTAMP
+        ORDER BY next_attempt_at, id
+        LIMIT #{limit}
+    </select>
+
+    <delete id="deleteTask">
+        DELETE FROM file_cleanup_task
+        WHERE id = #{taskId}
+    </delete>
+
+    <update id="recordFailure">
+        UPDATE file_cleanup_task
+        SET attempts = attempts + 1,
+            next_attempt_at = DATE_ADD(
+                CURRENT_TIMESTAMP,
+                INTERVAL #{retryDelaySeconds} SECOND
+        ),
+        last_error = #{lastError}
+        WHERE id = #{taskId}
+    </update>
+
+</mapper>

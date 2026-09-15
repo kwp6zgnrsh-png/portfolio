@@ -6,9 +6,11 @@ import java.util.Iterator;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
+import javax.imageio.stream.FileImageInputStream;
 import javax.imageio.stream.ImageInputStream;
 
 import com.study.backend.file.exception.FileException;
+import com.study.backend.file.exception.FileStorageException;
 
 public final class ImageDimensionValidator {
 
@@ -22,10 +24,7 @@ public final class ImageDimensionValidator {
 	public static void validate(Path imagePath) {
 		// ImageReader로 width, height만 읽기
 		// 최대 가로, 세로, 전체 픽셀 검사
-		try(ImageInputStream imageInput = ImageIO.createImageInputStream(imagePath.toFile())) {
-			if (imageInput == null) {
-				throw new FileException("파일 형식 오류");
-			}
+		try (ImageInputStream imageInput = new FileImageInputStream(imagePath.toFile())) {
 
 			Iterator<ImageReader> readers = ImageIO.getImageReaders(imageInput);
 
@@ -46,7 +45,7 @@ public final class ImageDimensionValidator {
 				reader.dispose();
 			}
 		} catch (IOException e) {
-			throw new FileException("이미지 정보를 읽을 수 없습니다.", e);
+			throw new FileStorageException("저장된 이미지 정보를 읽는 중 오류가 발생했습니다.", e);
 		}
 	}
 

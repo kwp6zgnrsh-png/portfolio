@@ -1,9 +1,5 @@
 package com.study.backend.board.service;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -17,7 +13,6 @@ import com.study.backend.category.service.CategoryService;
 import com.study.backend.file.service.FileService;
 import com.study.backend.file.service.FileServiceFactory;
 import com.study.backend.file.util.FileChangeUtils;
-import com.study.backend.file.util.FileCleanupHelper;
 
 @Service
 public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
@@ -60,19 +55,19 @@ public class FreeBoardService extends AbstractBoardService<FreeBoardMapper> {
 
 		FileService fs = fileService.getFileService(BoardType.BOARDS);
 
-		List<Path> createdFiles = new ArrayList<>();
-		FileCleanupHelper.registerRollbackCleanup(createdFiles);
-		try {
-			fs.validateFileCountForUpdate(boardId, board.getDeleteFiles(), files);
-			fs.deleteFiles(boardId, board.getDeleteFiles());
-			if (files != null && files.length > 0) {
-				FileCleanupHelper.addFiles(createdFiles, fs.createFiles(boardId, files));
-			}
-			updateBoardData(boardId, board, memberId);
-		} catch (RuntimeException e) {
-			FileCleanupHelper.cleanupFiles(createdFiles);
-			throw e;
+		fs.validateFileCountForUpdate(
+			boardId,
+			board.getDeleteFiles(),
+			files
+		);
+
+		fs.deleteFiles(boardId, board.getDeleteFiles());
+
+		if (hasNewFiles) {
+			fs.createFiles(boardId, files);
 		}
+
+		updateBoardData(boardId, board, memberId);
 	}
 
 	/** 수정 폼에 필요한 게시글을 조회한다. 존재하지 않거나 작성자가 아니면 예외를 던진다. */

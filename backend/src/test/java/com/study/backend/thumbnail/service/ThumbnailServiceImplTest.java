@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.study.backend.file.cleanup.service.UploadCleanupService;
 import com.study.backend.thumbnail.dto.SourceImage;
 import com.study.backend.thumbnail.mapper.ThumbnailMapper;
 import com.study.backend.thumbnail.model.ThumbnailMetaData;
@@ -27,6 +28,7 @@ class ThumbnailServiceImplTest {
 	@TempDir Path tempDir;
 
 	@Mock ThumbnailMapper thumbnailMapper;
+	@Mock UploadCleanupService uploadCleanupService;
 
 	@Test
 	void saveThumbnail_sameSource_createsIndependentFiles() throws Exception {
@@ -35,7 +37,7 @@ class ThumbnailServiceImplTest {
 		BufferedImage source = new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB);
 		ImageIO.write(source, "png", galleryDirectory.resolve("source.png").toFile());
 
-		ThumbnailServiceImpl thumbnailService = new ThumbnailServiceImpl(thumbnailMapper);
+		ThumbnailServiceImpl thumbnailService = new ThumbnailServiceImpl(thumbnailMapper, uploadCleanupService);
 		ReflectionTestUtils.setField(thumbnailService, "storePath", tempDir.toString());
 		ReflectionTestUtils.setField(thumbnailService, "thumbnailPath", "thumbnail/");
 		SourceImage sourceImage = SourceImage.builder()

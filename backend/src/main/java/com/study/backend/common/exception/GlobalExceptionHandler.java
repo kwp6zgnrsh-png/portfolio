@@ -27,6 +27,7 @@ import com.study.backend.comment.exception.CommentTargetNotAllowedException;
 import com.study.backend.common.dto.ApiResponse;
 import com.study.backend.file.exception.FileException;
 import com.study.backend.file.exception.FileNotFoundException;
+import com.study.backend.file.exception.FileStorageException;
 import com.study.backend.file.exception.RequiredFileException;
 import com.study.backend.member.exception.DuplicateMemberIdException;
 import com.study.backend.member.exception.LoginFailedException;
@@ -41,7 +42,6 @@ public class GlobalExceptionHandler {
 	@ResponseStatus(HttpStatus.BAD_REQUEST)
 	@ExceptionHandler(FileException.class)
 	public ApiResponse<Void> fileException(FileException e){
-		log.error("FileException", e);
 		return ApiResponse.of(e.getMessage());
 	}
 
@@ -135,6 +135,13 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(MaxUploadSizeExceededException.class)
 	public ApiResponse<Void> maxUploadSizeExceededException(MaxUploadSizeExceededException e) {
 		return ApiResponse.of("파일 용량 초과");
+	}
+
+	@ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+	@ExceptionHandler(FileStorageException.class)
+	public ApiResponse<Void> fileStorageException(FileStorageException e) {
+		log.error("파일 저장소 처리 실패", e);
+		return ApiResponse.of("파일 처리 중 오류가 발생했습니다.");
 	}
 
 	@ResponseStatus(HttpStatus.BAD_REQUEST)

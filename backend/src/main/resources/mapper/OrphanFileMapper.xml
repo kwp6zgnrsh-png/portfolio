@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.study.backend.file.cleanup.mapper.OrphanFileMapper">
+
+    <select id="findAllReferences"
+            resultType="com.study.backend.file.cleanup.model.StoredFileReference">
+        SELECT
+        path,
+        store_name,
+        extension,
+        state AS deleted
+        FROM file
+
+        UNION ALL
+
+        SELECT
+        path,
+        store_name,
+        extension,
+        false AS deleted
+        FROM thumbnail
+    </select>
+
+    <select id="findPendingTaskPaths" resultType="java.lang.String">
+        SELECT source_path
+        FROM file_cleanup_task
+
+        UNION
+
+        SELECT destination_path
+        FROM file_cleanup_task
+        WHERE destination_path IS NOT NULL
+    </select>
+
+    <select id="findReferencesByFileName"
+            resultType="com.study.backend.file.cleanup.model.StoredFileReference">
+        SELECT
+        path,
+        store_name,
+        extension,
+        state AS deleted
+        FROM file
+        WHERE CONCAT(store_name, extension) = #{fileName}
+
+        UNION ALL
+
+        SELECT
+        path,
+        store_name,
+        extension,
+        false AS deleted
+        FROM thumbnail
+        WHERE CONCAT(store_name, extension) = #{fileName}
+    </select>
+
+    <select id="existsPendingTask" resultType="boolean">
+        SELECT EXISTS (
+        SELECT 1
+        FROM file_cleanup_task
+        WHERE source_path = #{relativePath}
+        OR destination_path = #{relativePath}
+        )
+    </select>
+
+</mapper>

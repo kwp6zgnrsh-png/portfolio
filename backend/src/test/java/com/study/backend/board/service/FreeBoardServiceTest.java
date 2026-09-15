@@ -3,9 +3,7 @@ package com.study.backend.board.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.BDDMockito.*;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +22,7 @@ import com.study.backend.board.model.Board;
 import com.study.backend.board.model.BoardType;
 import com.study.backend.category.model.CategoryType;
 import com.study.backend.category.service.CategoryService;
+import com.study.backend.file.cleanup.service.UploadCleanupService;
 import com.study.backend.file.service.FileService;
 import com.study.backend.file.service.FileServiceFactory;
 
@@ -36,6 +35,7 @@ class FreeBoardServiceTest {
     @Mock FileServiceFactory fileServiceFactory;
     @Mock FileService fileService;
 	@Mock CategoryService categoryService;
+	@Mock UploadCleanupService uploadCleanupService;
 
     @InjectMocks FreeBoardService freeBoardService;
 
@@ -115,27 +115,7 @@ class FreeBoardServiceTest {
         then(fileService).should().createFiles(eq(1L), eq(files));
     }
 
-	@Test
-	@DisplayName("수정 실패 시 새로 생성한 물리 파일을 정리한다")
-	void updatePost_failureAfterCreateFiles_cleanupCreatedFiles() throws Exception {
-		BoardUpdateRequest update = boardUpdate();
-		org.springframework.web.multipart.MultipartFile mockFile =
-			mock(org.springframework.web.multipart.MultipartFile.class);
-		org.springframework.web.multipart.MultipartFile[] files = { mockFile };
-		Path createdFile = Files.writeString(tempDir.resolve("created.png"), "new");
 
-		given(mockFile.isEmpty()).willReturn(false);
-		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
-		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
-		given(fileService.createFiles(1L, files)).willReturn(List.of(createdFile));
-		willThrow(new RuntimeException("update failed"))
-			.given(freeBoardMapper).updatePost(1L, update, 1L);
-
-		assertThatThrownBy(() -> freeBoardService.updatePost(1L, update, 1L, files))
-			.isInstanceOf(RuntimeException.class);
-
-		assertThat(Files.exists(createdFile)).isFalse();
-	}
 
     // ── deletePost ──────────────────────────────────────────────────────
 
@@ -183,6 +163,34 @@ class FreeBoardServiceTest {
 		)
 			.isInstanceOf(BoardConflictException.class)
 			.hasMessage("게시글 상태가 변경되어 수정할 수 없습니다.");
+	}
+
+	@Test
+	@DisplayName("파일 생성 후 수정 실패 시 예외를 그대로 전파한다")
+	void updatePost_failureAfterCreateFiles_propagatesException() {
+		BoardUpdateRequest update = boardUpdate();
+
+		org.springframework.web.multipart.MultipartFile mockFile =
+			mock(org.springframework.web.multipart.MultipartFile.class);
+
+		org.springframework.web.multipart.MultipartFile[] files = {mockFile};
+
+		RuntimeException failure = new RuntimeException("update failed");
+
+		given(mockFile.isEmpty()).willReturn(false);
+		given(freeBoardMapper.getPostById(1L)).willReturn(board(1L));
+		given(fileServiceFactory.getFileService(BoardType.BOARDS))
+			.willReturn(fileService);
+
+		willThrow(failure)
+			.given(freeBoardMapper)
+			.updatePost(1L, update, 1L);
+
+		assertThatThrownBy(
+			() -> freeBoardService.updatePost(1L, update, 1L, files)
+		).isSameAs(failure);
+
+		then(fileService).should().createFiles(1L, files);
 	}
 
     // ── helpers ─────────────────────────────────────────────────────────

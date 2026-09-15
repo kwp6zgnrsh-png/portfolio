@@ -1,46 +1,70 @@
 package com.study.backend.file.event;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import lombok.extern.slf4j.Slf4j;
+import com.study.backend.file.cleanup.service.FileCleanupTaskService;
 
-@Slf4j
 @Component
 public class FileCleanupEventHandler {
 
+	private final FileCleanupTaskService cleanupTaskService;
+	private final Path storageRoot;
+
+	public FileCleanupEventHandler(FileCleanupTaskService cleanupTaskService,
+								   @Value("${store.base-path}") String storeBasePath) {
+		if (storeBasePath == null || storeBasePath.isBlank()) {
+			throw new IllegalArgumentException("파일 저장소 경로가 비어 있습니다.");
+		}
+
+		this.cleanupTaskService = cleanupTaskService;
+		this.storageRoot = Path.of(storeBasePath)
+			.toAbsolutePath()
+			.normalize();
+	}
+
 	/**
-	 * 트랜잭션 커밋 후 파일 이동/삭제를 수행한다.
-	 * 실패 시 로깅만 하고 예외를 전파하지 않는다.
+	 * 커밋 전에 파일 정리 작업을 같은 트랜잭션에 저장한다.
+	 * 등록 실패 시 예외를 전파하여 기존 변경도 함께 롤백한다.
 	 */
-	@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+	@TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
 	public void handleFileCleanup(FileCleanupEvent event) {
 		for (FileCleanupEvent.FileMoveTask task : event.moveTasks()) {
-			Path src = Paths.get(task.srcPath());
-			if (!Files.exists(src)) {
-				log.warn("물리 파일 없음, DB만 삭제 처리: {}", src);
-				continue;
-			}
-			try {
-				Files.move(src, Paths.get(task.destPath()), StandardCopyOption.REPLACE_EXISTING);
-			} catch (IOException e) {
-				log.error("파일 이동 실패: {}", task.srcPath(), e);
-			}
+			cleanupTaskService.enqueueMove(
+				toRelativePath(task.srcPath()),
+				toRelativePath(task.destPath())
+			);
 		}
 
 		for (String path : event.deletePaths()) {
-			try {
-				Files.deleteIfExists(Paths.get(path));
-			} catch (IOException e) {
-				log.error("파일 삭제 실패: {}", path, e);
-			}
+			cleanupTaskService.enqueueDelete(
+				toRelativePath(path)
+			);
 		}
+	}
+
+	/**
+	 * 이벤트의 파일 경로를 저장소 기준 상대 경로로 변환한다.
+	 * 저장소 자체와 저장소 밖의 경로는 거절한다.
+	 */
+	private String toRelativePath(String rawPath) {
+		if (rawPath == null || rawPath.isBlank()) {
+			throw new IllegalArgumentException("파일 정리 경로가 비어 있습니다.");
+		}
+
+		Path target = Path.of(rawPath)
+			.toAbsolutePath()
+			.normalize();
+
+		if (target.equals(storageRoot) || !target.startsWith(storageRoot)) {
+
+			throw new IllegalArgumentException("파일 정리 대상이 저장소 내부 경로가 아닙니다.");
+		}
+
+		return storageRoot.relativize(target).toString();
 	}
 }

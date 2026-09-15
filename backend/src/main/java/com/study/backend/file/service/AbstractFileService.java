@@ -3,7 +3,6 @@ package com.study.backend.file.service;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,9 +19,11 @@ import org.springframework.http.MediaType;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.study.backend.file.cleanup.service.UploadCleanupService;
 import com.study.backend.file.event.FileCleanupEvent;
 import com.study.backend.file.exception.FileException;
 import com.study.backend.file.exception.FileNotFoundException;
+import com.study.backend.file.exception.FileStorageException;
 import com.study.backend.file.exception.InvalidFilePathException;
 import com.study.backend.file.mapper.FileMapper;
 import com.study.backend.file.model.DownloadFile;
@@ -37,10 +38,14 @@ public abstract class AbstractFileService implements FileService {
 
 	protected final FileMapper fileMapper;
 	private final ApplicationEventPublisher eventPublisher;
+	private final UploadCleanupService uploadCleanupService;
 
-	public AbstractFileService(FileMapper fileMapper, ApplicationEventPublisher eventPublisher) {
+	public AbstractFileService(FileMapper fileMapper,
+							   ApplicationEventPublisher eventPublisher,
+							   UploadCleanupService uploadCleanupService) {
 		this.fileMapper = fileMapper;
 		this.eventPublisher = eventPublisher;
+		this.uploadCleanupService = uploadCleanupService;
 	}
 
 	/** 게시글 ID로 첨부 파일 메타데이터 목록을 조회한다. */
@@ -97,6 +102,8 @@ public abstract class AbstractFileService implements FileService {
 		validateFiles(files);
 
 		List<Path> writtenPaths = new ArrayList<>();
+		boolean rollbackManaged = uploadCleanupService.registerRollbackCleanup(writtenPaths);
+
 		try {
 			for (MultipartFile multipartFile : files) {
 				if (!multipartFile.isEmpty()) {
@@ -120,10 +127,10 @@ public abstract class AbstractFileService implements FileService {
 						.build();
 
 					File uploadFile = new File(uploadPath);
-					multipartFile.transferTo(uploadFile);
 
-					// 검증 실패 시 catch에서 삭제할 수 있도록 먼저 등록
+					// 저장 도중 일부만 작성돼도 정리할 수 있도록 먼저 등록한다.
 					writtenPaths.add(uploadFile.toPath());
+					multipartFile.transferTo(uploadFile);
 
 					if (isImageType(mimeSubtype)) {
 						ImageDimensionValidator.validate(uploadFile.toPath());
@@ -134,17 +141,15 @@ public abstract class AbstractFileService implements FileService {
 			}
 			return writtenPaths;
 		} catch (IOException | RuntimeException e) {
-			for (Path writtenPath : writtenPaths) {
-				try {
-					Files.deleteIfExists(writtenPath);
-				} catch (IOException deleteException) {
-					log.error("업로드 실패 후 파일 정리 실패: {}", writtenPath, deleteException);
-				}
+			if (!rollbackManaged) {
+				uploadCleanupService.cleanupFiles(writtenPaths);
 			}
-			if (e instanceof FileException fileException) {
-				throw fileException;
+
+			if (e instanceof IOException ioException) {
+				throw new FileStorageException("업로드 파일 저장 중 입출력 오류가 발생했습니다.", ioException);
 			}
-			throw new FileException("파일 저장 실패", e);
+
+			throw (RuntimeException) e;
 		}
 	}
 
@@ -189,7 +194,7 @@ public abstract class AbstractFileService implements FileService {
 		}
 	}
 
-	/** 파일 메타데이터를 삭제하고, 물리 파일 이동은 트랜잭션 커밋 후 이벤트로 처리한다. */
+	/** 파일 메타데이터를 삭제 표시하고, 물리 파일 이동 작업 등록 이벤트를 발행한다. */
 	private void deleteFileMetadataAndPublishMoveEvent(List<FileMetaData> files) {
 		if (files == null || files.isEmpty()) {
 			return;
@@ -214,9 +219,12 @@ public abstract class AbstractFileService implements FileService {
 		try (InputStream is = file.getInputStream()) {
 			byte[] header = new byte[8];
 			int read = is.read(header);
-			if (read < 4 || !matchesMagicBytes(header, type)) throw new FileException("파일 형식 오류");
+			// 헤더가 형식과 맞지 않는 경우는 기존 FileException 유지
+			if (read < 4 || !matchesMagicBytes(header, type)) {
+				throw new FileException("파일 형식 오류");
+			}
 		} catch (IOException e) {
-			throw new FileException("파일 형식 오류", e);
+		throw new FileStorageException("업로드 파일을 읽는 중 오류가 발생했습니다.", e);
 		}
 	}
 
