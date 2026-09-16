@@ -2,6 +2,7 @@ package com.study.backend.board.strategy;
 
 import java.util.List;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -44,17 +45,22 @@ public class FreeBoardStrategy implements BoardReadableStrategy, BoardCreateStra
 		return responseAssembler.assembleListResponse(boardList, page);
 	}
 
-	/** 파일 검증·저장 실패 시 게시글은 유지하고 파일 업로드 실패를 알린다. */
+	/** 파일 검증·저장·DB 처리 실패 시 게시글은 유지하고 부분 성공을 반환한다. */
 	@Override
 	public BoardCreateResult createPost(Board board, Long boardTypeId, Long memberId, MultipartFile[] files) {
+		// 게시글 저장 실패는 부분 성공으로 처리하지 않는다.
 		boardService.createPost(board, boardTypeId, memberId);
 
 		if (files != null && files.length > 0) {
 			try {
 				fileService.getFileService(BoardType.BOARDS).validateFiles(files);
+
 				boardService.createFiles(board.getId(), files);
 			} catch (FileException | FileStorageException e) {
 				log.warn("게시글은 등록됐지만 파일 저장 실패: boardId={}", board.getId(), e);
+				return BoardCreateResult.withFileUploadFailure();
+			} catch (DataAccessException e) {
+				log.error("게시글은 등록됐지만 파일 DB 처리 실패: boardId={}", board.getId(), e);
 				return BoardCreateResult.withFileUploadFailure();
 			}
 		}

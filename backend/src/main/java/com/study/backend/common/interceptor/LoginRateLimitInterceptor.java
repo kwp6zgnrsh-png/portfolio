@@ -11,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.util.NumberUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.study.backend.common.dto.ApiResponse;
@@ -42,7 +44,8 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 
 	private static final String LOGIN_PATH = "/api/login";
 	private static final String SIGN_UP_PATH = "/api/sign-up";
-	private static final String SECRET_VERIFY_SUFFIX = "/verifySecretPostPassword";
+	private static final String SECRET_VERIFY_PATTERN =
+		"/api/{boardType}/{id}/verifySecretPostPassword";
 
 	/** 로그인: IP별 요청 타임스탬프 */
 	private final Map<String, long[]> loginAttempts = new ConcurrentHashMap<>();
@@ -59,24 +62,27 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 		this.objectMapper = objectMapper;
 	}
 
-	/** 1분마다 실행: 윈도우가 만료된 IP 항목을 메모리에서 제거 */
+	/** 1분마다 실행: 모든 요청 기록이 만료된 항목을 메모리에서 제거한다. */
 	@Scheduled(fixedRate = 60_000)
 	public void evictExpiredEntries() {
 		long now = Instant.now().toEpochMilli();
-		// 모든 타임스탬프가 1분 이상 지난 항목은 삭제
+
 		loginAttempts.entrySet().removeIf(entry ->
-			Arrays.stream(entry.getValue()).allMatch(t -> now - t >= WINDOW_MS)
+			Arrays.stream(entry.getValue()).allMatch(timestamp -> now - timestamp >= WINDOW_MS)
 		);
+
+		signUpAttempts.entrySet().removeIf(entry ->
+			Arrays.stream(entry.getValue()).allMatch(timestamp -> now - timestamp >= WINDOW_MS)
+		);
+
 		secretVerifyAttempts.entrySet().removeIf(entry ->
-			Arrays.stream(entry.getValue())
-				.allMatch(timestamp -> now - timestamp >= WINDOW_MS)
+			Arrays.stream(entry.getValue()).allMatch(timestamp -> now - timestamp >= WINDOW_MS)
 		);
 	}
-
-	 /** 로그인, 회원가입, 비밀글 검증 요청에 대해 슬라이딩 윈도우 기반 Rate Limit을 적용한다.*/
+	/** 로그인, 회원가입, 비밀글 검증 요청에 대해 슬라이딩 윈도우 기반 Rate Limit을 적용한다.*/
 	@Override
 	public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
-							 @NonNull Object handler) throws Exception {
+		@NonNull Object handler) throws Exception {
 		String ip = resolveClientIp(request);
 		long now = Instant.now().toEpochMilli();
 
@@ -138,46 +144,37 @@ public class LoginRateLimitInterceptor implements HandlerInterceptor {
 		return request.getRemoteAddr();
 	}
 
-	/** 요청 URI가 로그인 경로인지 확인한다. */
+	/** Spring MVC가 확정한 컨트롤러 매핑을 기준으로 검사한다. */
 	private boolean isLoginPath(HttpServletRequest request) {
-		return LOGIN_PATH.equals(request.getRequestURI());
+		return LOGIN_PATH.equals(request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE));
 	}
 
-	/** 요청 URI가 회원가입 경로인지 확인한다. */
 	private boolean isSignUpPath(HttpServletRequest request) {
-		return SIGN_UP_PATH.equals(request.getRequestURI());
+		return SIGN_UP_PATH.equals(request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE));
 	}
 
-	/** 요청 URI가 비밀글 비밀번호 검증 경로인지 확인한다. */
 	private boolean isSecretVerifyPath(HttpServletRequest request) {
-		String uri = request.getRequestURI();
-		return uri != null && uri.endsWith(SECRET_VERIFY_SUFFIX);
+		return SECRET_VERIFY_PATTERN.equals(
+			request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE)
+		);
 	}
 
-	/** 비밀글 검증 URI에서 boardId 세그먼트를 추출한다. */
+	/** Spring MVC가 경로 파라미터를 분리하고 디코딩한 ID를 사용한다. */
 	private String extractBoardIdFromSecretVerifyPath(HttpServletRequest request) {
-		String uri = request.getRequestURI();
-		String[] segments = uri.split("/");
-
-		if (segments.length < 2) {
+		Object attribute = request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
+		if (!(attribute instanceof Map<?, ?> variables)) {
 			return null;
 		}
-
-		String rawBoardId = segments[segments.length - 2];
-		return normalizeBoardId(rawBoardId);
+		Object id = variables.get("id");
+		return id instanceof String rawId ? normalizeBoardId(rawId) : null;
 	}
 
-	/** 게시글 ID를 숫자 기준으로 정규화하여 선행 0을 이용한 요청 제한 우회를 방지한다. */
+	/** 기본 Spring Long 변환과 같은 방식으로 동일한 ID 표기를 정규화한다. */
 	private String normalizeBoardId(String rawBoardId) {
 		try {
-			long boardId = Long.parseLong(rawBoardId);
-
-			if (boardId <= 0) {
-				return null;
-			}
-
-			return Long.toString(boardId);
-		} catch (NumberFormatException e) {
+			long boardId = NumberUtils.parseNumber(rawBoardId, Long.class);
+			return boardId > 0 ? Long.toString(boardId) : null;
+		} catch (IllegalArgumentException e) {
 			return null;
 		}
 	}

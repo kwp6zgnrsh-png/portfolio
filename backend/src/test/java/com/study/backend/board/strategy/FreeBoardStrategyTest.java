@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.study.backend.board.assembler.FreeBoardResponseAssembler;
@@ -88,4 +89,69 @@ class FreeBoardStrategyTest {
 		then(fileService).should().validateFiles(files);
 		then(boardService).should().createFiles(board.getId(), files);
 	}
+
+	@Test
+	@DisplayName("파일 DB 저장 실패 시 게시글 등록을 유지하고 부분 성공을 반환한다")
+	void createPost_fileDatabaseFailure_returnsPartialSuccess() {
+		Board board = Board.builder().id(1L).build();
+		MultipartFile[] files = { mock(MultipartFile.class) };
+
+		given(fileServiceFactory.getFileService(BoardType.BOARDS))
+			.willReturn(fileService);
+
+		willThrow(new DataIntegrityViolationException("파일 DB 저장 실패"))
+			.given(boardService)
+			.createFiles(board.getId(), files);
+
+		BoardCreateResult result = strategy.createPost(
+			board, BoardType.BOARDS.id(), 1L, files
+		);
+
+		assertThat(result.fileUploadFailed()).isTrue();
+		assertThat(result.message())
+			.isEqualTo("게시글은 등록됐지만 파일 업로드에 실패했습니다.");
+
+		then(boardService).should().createPost(board, BoardType.BOARDS.id(), 1L);
+		then(boardService).should().createFiles(board.getId(), files);
+	}
+
+	@Test
+	@DisplayName("게시글 DB 저장 실패는 부분 성공으로 처리하지 않는다")
+	void createPost_boardDatabaseFailure_propagatesException() {
+		Board board = Board.builder().build();
+		MultipartFile[] files = { mock(MultipartFile.class) };
+
+		DataIntegrityViolationException failure = new DataIntegrityViolationException("게시글 DB 저장 실패");
+
+		willThrow(failure)
+			.given(boardService)
+			.createPost(board, BoardType.BOARDS.id(), 1L);
+
+		assertThatThrownBy(() -> strategy.createPost(
+			board, BoardType.BOARDS.id(), 1L, files
+		)).isSameAs(failure);
+
+		then(boardService).should(never()).createFiles(any(), any());
+		then(fileServiceFactory).shouldHaveNoInteractions();
+	}
+
+	@Test
+	@DisplayName("파일 처리 중 일반 코드 오류는 부분 성공으로 숨기지 않는다")
+	void createPost_unexpectedFailure_propagatesException() {
+		Board board = Board.builder().id(1L).build();
+		MultipartFile[] files = { mock(MultipartFile.class) };
+
+		given(fileServiceFactory.getFileService(BoardType.BOARDS)).willReturn(fileService);
+
+		IllegalStateException failure = new IllegalStateException("예상하지 못한 코드 오류");
+
+		willThrow(failure)
+			.given(boardService)
+			.createFiles(board.getId(), files);
+
+		assertThatThrownBy(() -> strategy.createPost(
+			board, BoardType.BOARDS.id(), 1L, files
+		)).isSameAs(failure);
+	}
+
 }
