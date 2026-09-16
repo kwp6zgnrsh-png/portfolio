@@ -1,5 +1,6 @@
 package com.study.backend.common.util;
 
+import java.sql.SQLTimeoutException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -10,6 +11,8 @@ import java.util.function.Supplier;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.stereotype.Component;
 
 import com.study.backend.common.exception.BoardQueryUnavailableException;
@@ -44,7 +47,7 @@ public class BoardQueryRunner {
 
 					Throwable cause = unwrap(error);
 
-					if (cause instanceof TimeoutException) {
+					if (isQueryUnavailable(cause)) {
 						throw new BoardQueryUnavailableException(cause);
 					}
 
@@ -68,6 +71,22 @@ public class BoardQueryRunner {
 
 			throw new CompletionException(cause);
 		}
+	}
+
+	private static boolean isQueryUnavailable(Throwable error) {
+		for (Throwable cause = error;
+		     cause != null;
+		     cause = cause.getCause()) {
+
+			if (cause instanceof TimeoutException
+				|| cause instanceof QueryTimeoutException
+				|| cause instanceof SQLTimeoutException
+				|| cause instanceof CannotGetJdbcConnectionException) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private static Throwable unwrap(Throwable error) {

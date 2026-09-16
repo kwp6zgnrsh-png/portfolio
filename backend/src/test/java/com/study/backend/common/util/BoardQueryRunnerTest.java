@@ -2,6 +2,7 @@ package com.study.backend.common.util;
 
 import static org.assertj.core.api.Assertions.*;
 
+import java.sql.SQLTimeoutException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -10,6 +11,8 @@ import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 
 import com.study.backend.common.exception.BoardQueryUnavailableException;
 
@@ -73,4 +76,41 @@ class BoardQueryRunnerTest {
 		assertThatThrownBy(() -> runner.awaitAll(future))
 			.isSameAs(original);
 	}
+
+	@Test
+	@DisplayName("DB 쿼리 시간 초과는 조회 불가 예외로 전달한다")
+	void submit_queryTimeout_throwsUnavailable() {
+		BoardQueryRunner runner =
+			new BoardQueryRunner(Runnable::run, 3000);
+
+		QueryTimeoutException original =
+			new QueryTimeoutException("쿼리 시간 초과", new SQLTimeoutException("테스트용 시간 초과"));
+
+		CompletableFuture<String> future = runner.submit(() -> {
+			throw original;
+		});
+
+		assertThatThrownBy(() -> runner.awaitAll(future))
+			.isInstanceOf(BoardQueryUnavailableException.class)
+			.hasCause(original);
+	}
+
+	@Test
+	@DisplayName("DB 연결 획득 실패는 조회 불가 예외로 전달한다")
+	void submit_connectionFailure_throwsUnavailable() {
+		BoardQueryRunner runner =
+			new BoardQueryRunner(Runnable::run, 3000);
+
+		CannotGetJdbcConnectionException original =
+			new CannotGetJdbcConnectionException("테스트용 연결 획득 실패");
+
+		CompletableFuture<String> future = runner.submit(() -> {
+			throw original;
+		});
+
+		assertThatThrownBy(() -> runner.awaitAll(future))
+			.isInstanceOf(BoardQueryUnavailableException.class)
+			.hasCause(original);
+	}
+
 }

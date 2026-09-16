@@ -8,7 +8,7 @@
         VALUES (#{fileName},#{storeName},#{extension},#{path},#{fileSize},#{boardId})
     </insert>
 
-    <select id="getFilesByBoardId" resultType="com.study.backend.file.model.FileMetaData">
+    <select id="getFilesByBoardId" resultType="com.study.backend.file.model.FileMetaData" timeout="2">
         SELECT id, file_name, store_name, extension, path, file_size, board_id
         FROM file
         WHERE board_id = #{boardId} AND state = false

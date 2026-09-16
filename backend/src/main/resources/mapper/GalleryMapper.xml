@@ -146,7 +146,7 @@
         WHERE b.id = #{boardId} AND b.state = false
     </select>
 
-    <select id="getPostList" resultType="com.study.backend.board.model.Board">
+    <select id="getPostList" resultType="com.study.backend.board.model.Board" timeout="2">
         SELECT b.id,
                c.category_name,
                <include refid="formatDate"><property name="prefix" value="b"/></include>,

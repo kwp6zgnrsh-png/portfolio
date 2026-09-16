@@ -24,7 +24,7 @@
         WHERE co.id = #{commentId}
     </select>
 
-    <select id="getCommentsByBoardId" resultType="com.study.backend.comment.model.Comment">
+    <select id="getCommentsByBoardId" resultType="com.study.backend.comment.model.Comment" timeout="2">
         SELECT co.id,
                co.content,
                DATE_FORMAT(co.created_date, '%Y-%m-%d %H:%i') AS createdDate,

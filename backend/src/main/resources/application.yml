@@ -6,6 +6,14 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      connection-timeout: 1000
+      validation-timeout: 500
+
+      data-source-properties:
+        connectTimeout: 1000
+        socketTimeout: 5000
+        enableQueryTimeouts: true
   servlet:
     multipart:
       max-file-size: 2MB

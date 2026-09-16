@@ -149,7 +149,7 @@
         SELECT EXISTS(SELECT 1 FROM answer WHERE board_id = #{boardId})
     </select>
 
-    <select id="getPostList" resultType="com.study.backend.board.model.Board">
+    <select id="getPostList" resultType="com.study.backend.board.model.Board" timeout="2">
         SELECT b.id,
                b.title,
                <include refid="formatDate"><property name="prefix" value="b"/></include>,
